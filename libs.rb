@@ -2,6 +2,8 @@ require 'nokogiri'
 require 'sqlite3'
 require 'active_record'
 require 'json'
+require 'solid_assert'
+SolidAssert.enable_assertions
 require File.join(__dir__, 'models')
 
 Object.send(:remove_const, :DATA_PATH) if Object.const_defined?(:DATA_PATH)
@@ -30,10 +32,18 @@ class Importer
     end
 
     def import_video(video_data)
+      media_file = video_data[:filenameandpath].sub(
+        SETTINGS[:kodi_media_path_match],
+        SETTINGS[:plex_media_path_replace],
+      )
+      media_parts = MediaPart.only_one!(:file =>  media_file)
+      media_item = media_parts.media_item
+      metadata_item = media_item.metadata_item
+
       last_viewed_at = video_data[:last_played].strftime("%Y-%m-%d %H:%M:%S")
-      MetadataItemSettings.create(
+      MetadataItemSetting.create(
         account_id: SETTINGS[:account_id],
-        guid: video_data[:guid],
+        guid: metadata_item.guid,
         view_count: video_data[:play_count],
         view_offset: video_data[:position] == 0 ? nil : video_data[:position]*1000,
         last_viewed_at: last_viewed_at,
@@ -43,11 +53,10 @@ class Importer
       )
     end
 
-    def import_movie_node(node, guid)
+    def import_movie_node(node)
       unique_ids = node.xpath('./uniqueid[@type="imdb"]')
-      raise "this is unexpected #{unique_ids.inspect}" if unique_ids.children.count != 1
+      assert unique_ids.children.count == 1
       import_video(
-        guid: guid,
         position: node.xpath('./resume/position/text()').text.to_i,
         play_count: node.xpath('./playcount/text()').text.to_i,
         last_played: DateTime.parse(node.xpath('./lastplayed/text()').text),
@@ -56,8 +65,8 @@ class Importer
       )
     end
 
-    def import_move_node_from_path(path, guid)
-      import_movie_node(get_kodi_data().xpath(path).first, guid)
+    def import_move_node_from_path(path)
+      import_movie_node(get_kodi_data().xpath(path).first)
     end
   end
 end

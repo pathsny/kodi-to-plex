@@ -1,14 +1,44 @@
-class MetadataItemSettings < ActiveRecord::Base
+require 'safe_attributes/base'
+require 'solid_assert'
+
+
+module ActiveRecordOnlyOne
+  extend ActiveSupport::Concern
+
+  module ClassMethods
+    def only_one!(options)
+      list = where(options)
+      assert list.size == 1
+      list.first
+    end
+  end
 end
 
-class MediaParts < ActiveRecord::Base
+ActiveRecord::Base.send(:include, ActiveRecordOnlyOne)
+
+class MetadataItemSetting < ActiveRecord::Base
 end
 
-class MediaItems < ActiveRecord::Base
+class MediaPart < ActiveRecord::Base
+  belongs_to :media_item
+
+  include SafeAttributes::Base
+  bad_attribute_names :hash
+
+
 end
 
-class MetadataItems < ActiveRecord::Base
+class MediaItem < ActiveRecord::Base
+  has_many :media_parts
+  belongs_to :metadata_item
 end
 
-class MetadataItemViews < ActiveRecord::Base
+class MetadataItem < ActiveRecord::Base
+  has_many :media_items
+
+  include SafeAttributes::Base
+  bad_attribute_names :hash
+end
+
+class MetadataItemView < ActiveRecord::Base
 end
