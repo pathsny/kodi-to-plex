@@ -1,9 +1,11 @@
-| name | position | playcount | imdb | last_played | Category |
+| name | position | playcount | imdb | last_played | Category | Verified |
 | --- | --- | --- | --- | --- | --- | --- |
-| Jumanji Welcome to the Jungle | 0 | 2 | tt2283362 | 2018-03-28 | Seen and Incomplete |
-| The Thousand Faces of Dunjia | 687 | 0 | tt6814080 | 2018-04-19 | Unseen and Incomplete |
-| Wonder Woman (0) | 5359 | 1 | tt0451279 | 2018-03-12 | Seen and Complete |
-| Wonder Woman (2017) | 7109 | 0 | tt0451279 | 2017-09-30 | Seen and Incomplete - Duplicate |
+| Jumanji Welcome to the Jungle | 0 | 2 | tt2283362 | 2018-03-28 | Seen and Incomplete | No |
+| The Thousand Faces of Dunjia | 687 | 0 | tt6814080 | 2018-04-19 | Unseen and Incomplete | No |
+| Wonder Woman (0) | 5359 | 1 | tt0451279 | 2018-03-12 | Seen and Complete | No |
+| Wonder Woman (2017) | 7109 | 0 | tt0451279 | 2017-09-30 | Seen and Incomplete - Duplicate | No |
+| Yamakasi | 0 | 0 | tt0267129 | | Never Started | No |
+| Thor The Dark World | 946 | 1 | tt1981115 | 2018-03-15 | Seen and Incomplete | No |
 
 
 ## ToDo List

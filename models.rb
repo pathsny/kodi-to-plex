@@ -16,9 +16,6 @@ end
 
 ActiveRecord::Base.send(:include, ActiveRecordOnlyOne)
 
-class MetadataItemSetting < ActiveRecord::Base
-end
-
 class MediaPart < ActiveRecord::Base
   belongs_to :media_item
 
@@ -41,4 +38,7 @@ class MetadataItem < ActiveRecord::Base
 end
 
 class MetadataItemView < ActiveRecord::Base
+end
+
+class MetadataItemSetting < ActiveRecord::Base
 end
