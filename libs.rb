@@ -31,6 +31,11 @@ class Importer
       changed_at
     end
 
+    def clear_tables
+      MetadataItemSetting.delete_all
+      MetadataItemView.delete_all
+    end
+
     def import_video(video_data)
       invariant "last played and play stats must be consistent #{video_data[:filenameandpath]}" do
         if video_data[:last_played].nil?
