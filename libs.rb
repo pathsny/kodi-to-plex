@@ -36,6 +36,16 @@ class Importer
       MetadataItemView.delete_all
     end
 
+    def retrieve_metadata(video_data)
+      media_file = video_data[:filenameandpath].sub(
+        SETTINGS[:kodi_media_path_match],
+        SETTINGS[:plex_media_path_replace],
+      )
+      media_parts = MediaPart.only_one!(:file =>  media_file)
+      media_item = media_parts.media_item
+      media_item.metadata_item
+    end
+
     def import_video(video_data)
       invariant "last played and play stats must be consistent #{video_data[:filenameandpath]}" do
         if video_data[:last_played].nil?
@@ -46,32 +56,42 @@ class Importer
       end
       return if video_data[:last_played].nil?
 
-      media_file = video_data[:filenameandpath].sub(
-        SETTINGS[:kodi_media_path_match],
-        SETTINGS[:plex_media_path_replace],
-      )
-      media_parts = MediaPart.only_one!(:file =>  media_file)
-      media_item = media_parts.media_item
-      metadata_item = media_item.metadata_item
+      metadata_item = retrieve_metadata(video_data)
 
-      last_viewed_at = video_data[:last_played].strftime("%Y-%m-%d %H:%M:%S")
-      MetadataItemSetting.create(
+      # How we handle duplicate records
+      # created_at will be for the oldest record
+      # last_viewed_at and updated_at for the newest record.
+      # view_count to be the sum of all the records
+      # view_offset to be the value of the newest record
+      setting = MetadataItemSetting.find_or_initialize_by(guid: metadata_item.guid)
+      setting.attributes = {
         account_id: SETTINGS[:account_id],
-        guid: metadata_item.guid,
-        view_count: video_data[:play_count],
-        view_offset: video_data[:position] == 0 ? nil : video_data[:position]*1000,
-        last_viewed_at: last_viewed_at,
-        created_at: last_viewed_at,
-        updated_at: last_viewed_at,
-        changed_at: make_changed_at()
-      )
+        last_viewed_at: [
+          video_data[:last_played],
+          setting.last_viewed_at
+        ].compact.max,
+        created_at: [
+          video_data[:last_played],
+          setting.created_at
+        ].compact.min,
+        updated_at: [
+          video_data[:last_played],
+          setting[:updated_at]
+        ].compact.max,
+        view_count: video_data[:play_count] + (setting.view_count || 0),
+        changed_at: make_changed_at(),
+      }
+      setting.view_offset = (
+        video_data[:position] == 0 ? nil : video_data[:position]*1000
+      ) if setting.last_viewed_at_changed?
+      setting.save!
 
       video_data[:play_count].times do |i|
         parent_id = metadata_item.parent_id
         assert parent_id.nil?, "non nil parents not handled yet for #{video_data[:filenameandpath]}"
 
 
-        MetadataItemView.create(
+        MetadataItemView.create!(
           account_id: SETTINGS[:account_id],
           guid: metadata_item.guid,
           metadata_type: metadata_item.metadata_type,
@@ -82,7 +102,7 @@ class Importer
           index: metadata_item.index,
           title: metadata_item.title,
           thumb_url: metadata_item.user_thumb_url,
-          viewed_at: last_viewed_at,
+          viewed_at: video_data[:last_played],
           grandparent_guid: '',
           originally_available_at: metadata_item.originally_available_at,
           device_id: SETTINGS[:device_id],

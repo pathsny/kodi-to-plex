@@ -1,6 +1,7 @@
 require 'safe_attributes/base'
 require 'solid_assert'
 
+ActiveRecord::Base.record_timestamps = false
 
 module ActiveRecordOnlyOne
   extend ActiveSupport::Concern
@@ -41,4 +42,5 @@ class MetadataItemView < ActiveRecord::Base
 end
 
 class MetadataItemSetting < ActiveRecord::Base
+  validates :guid, :uniqueness => true
 end
