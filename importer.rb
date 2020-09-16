@@ -20,6 +20,13 @@ class Importer
       )
       @instance
     end
+
+    def close
+      if @instance
+        ActiveRecord::Base.connection.close
+        @instance = nil
+      end
+    end
   end
 
   def initialize(settings)
