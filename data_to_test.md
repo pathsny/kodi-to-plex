@@ -10,8 +10,6 @@
 
 ## ToDo List
 - Movies
-  - figure out how to handle duplicates
-  - figure out how unseen and not started movies are dealt with
   - test multi-part movie is handled in a sane manner
   - tess imdb functionality to ensure metadata is in place
   - load entire movie history
