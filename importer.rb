@@ -145,7 +145,7 @@ class Importer
     )
   end
 
-  def import_move_node_from_path(path)
+  def import_movie_node_from_path(path)
     import_movie_node(get_kodi_data().xpath(path).first)
   end
 
