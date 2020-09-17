@@ -9,7 +9,7 @@ module ActiveRecordOnlyOne
   module ClassMethods
     def only_one!(options)
       list = where(options)
-      assert list.size == 1
+      assert list.size == 1, "Found #{list.size} records when searching for #{self.name} with #{options}"
       list.first
     end
   end

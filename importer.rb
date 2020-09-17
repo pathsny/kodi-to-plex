@@ -8,6 +8,8 @@ require File.join(__dir__, 'models')
 
 Object.send(:remove_const, :DATA_PATH) if Object.const_defined?(:DATA_PATH)
 DATA_PATH = File.join(__dir__, 'data')
+Object.send(:remove_const, :FILE_MATCH_REGEX) if Object.const_defined?(:FILE_MATCH_REGEX)
+FILE_MATCH_REGEX = /smb:\/\/.+?(?=\s,\ssmb:\/\/|$)/
 
 class Importer
   class << self
@@ -33,6 +35,7 @@ class Importer
 
   def initialize(settings)
     @settings = settings
+    @filename_substitutions = JSON.parse(File.read(File.join(DATA_PATH, 'filename_substitutions.json')))
   end
 
   def get_kodi_data
@@ -51,13 +54,15 @@ class Importer
   end
 
   def retrieve_metadata(video_data)
-    media_file = video_data[:filenameandpath].sub(
-      @settings[:kodi_media_path_match],
-      @settings[:plex_media_path_replace],
-    )
-    media_parts = MediaPart.only_one!(:file =>  media_file)
-    media_item = media_parts.media_item
-    media_item.metadata_item
+    media_items = video_data[:filenameandpath].map do |name|
+      media_file = @filename_substitutions.fetch(name, name).sub(
+        @settings[:kodi_media_path_match],
+        @settings[:plex_media_path_replace],
+      )
+      MediaPart.only_one!(:file =>  media_file).media_item
+    end.uniq
+    assert media_items.size == 1
+    media_items.first.metadata_item
   end
 
   def import_video(video_data)
@@ -140,7 +145,7 @@ class Importer
       position: node.xpath('./resume/position/text()').text.to_i,
       play_count: node.xpath('./playcount/text()').text.to_i,
       last_played: last_played,
-      filenameandpath: node.xpath('./filenameandpath/text()').text,
+      filenameandpath: node.xpath('./filenameandpath/text()').text.scan(FILE_MATCH_REGEX),
       imdb: get_imdb_id(node),
     )
   end
@@ -152,4 +157,6 @@ class Importer
   def inspect
     "#<#{self.class}:#{object_id}>"
   end
+
+  attr_reader :settings
 end
