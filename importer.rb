@@ -27,6 +27,8 @@ class Importer
         @instance = nil
       end
     end
+
+    attr_reader :instance
   end
 
   def initialize(settings)
@@ -145,5 +147,9 @@ class Importer
 
   def import_move_node_from_path(path)
     import_movie_node(get_kodi_data().xpath(path).first)
+  end
+
+  def inspect
+    "#<#{self.class}:#{object_id}>"
   end
 end

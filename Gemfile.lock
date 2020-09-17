@@ -13,6 +13,7 @@ GEM
       tzinfo (~> 1.1)
       zeitwerk (~> 2.2, >= 2.2.2)
     concurrent-ruby (1.1.7)
+    diffy (3.4.0)
     i18n (1.8.5)
       concurrent-ruby (~> 1.0)
     mini_portile2 (2.4.0)
@@ -33,6 +34,7 @@ PLATFORMS
 
 DEPENDENCIES
   activerecord
+  diffy
   nokogiri
   safe_attributes
   solid_assert
