@@ -10,6 +10,8 @@ Object.send(:remove_const, :DATA_PATH) if Object.const_defined?(:DATA_PATH)
 DATA_PATH = File.join(__dir__, 'data')
 Object.send(:remove_const, :FILE_MATCH_REGEX) if Object.const_defined?(:FILE_MATCH_REGEX)
 FILE_MATCH_REGEX = /smb:\/\/.+?(?=\s,\ssmb:\/\/|$)/
+Object.send(:remove_const, :IMDB_MATCH_REGEX) if Object.const_defined?(:IMDB_MATCH_REGEX)
+IMDB_MATCH_REGEX = /com.plexapp.agents.imdb:\/\/(?<imdb>.*)\?lang=en/
 
 class Importer
   class << self
@@ -35,7 +37,7 @@ class Importer
 
   def initialize(settings)
     @settings = settings
-    @filename_substitutions = JSON.parse(File.read(File.join(DATA_PATH, 'filename_substitutions.json')))
+    @exclusions = JSON.parse(File.read(File.join(DATA_PATH, 'exclusions.json')))
   end
 
   def get_kodi_data
@@ -55,14 +57,21 @@ class Importer
 
   def retrieve_metadata(video_data)
     media_items = video_data[:filenameandpath].map do |name|
-      media_file = @filename_substitutions.fetch(name, name).sub(
+      media_file = @exclusions['filename_substitutions'].fetch(name, name).sub(
         @settings[:kodi_media_path_match],
         @settings[:plex_media_path_replace],
       )
       MediaPart.only_one!(:file =>  media_file).media_item
     end.uniq
     assert media_items.size == 1
-    media_items.first.metadata_item
+
+    media_items.first.metadata_item.tap do |m|
+      # Let's make sure the metadata matches before we return it.
+      unless @exclusions['known_imdb_mismatches'].include?(m.title)
+        imdb_id = m.guid.match(IMDB_MATCH_REGEX)&.named_captures&.dig('imdb')
+        assert imdb_id == video_data[:imdb], "Imdb does not match for #{m.title}. Plex has #{imdb_id} and Kodi has #{video_data[:imdb]}"
+      end
+    end
   end
 
   def import_video(video_data)
@@ -131,7 +140,7 @@ class Importer
 
   def get_imdb_id(node)
     unique_ids = node.xpath('./uniqueid[@type="imdb"]')
-    return unique_ids.first if unique_ids.children.count == 1
+    return unique_ids.first.text if unique_ids.children.count == 1
     ids = node.xpath('./id')
     assert ids.children.count == 1, "found duplicate id node #{ids.text}"
     id = ids.first.text

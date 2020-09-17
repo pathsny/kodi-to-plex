@@ -17,7 +17,6 @@
 
 ## ToDo List
 - Movies
-  - tess imdb functionality to ensure metadata is in place
   - load entire movie history
 - Handle TV Series
   - A seen episode marks the season as seen and the show as seen
