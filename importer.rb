@@ -147,11 +147,17 @@ class Importer
   def get_imdb_id(node)
     unique_ids = node.xpath('./uniqueid[@type="imdb"]')
     return unique_ids.first.text if unique_ids.children.count == 1
+    tmdb_ids = node.xpath('./uniqueid[@type="tmdb"]')
+    if tmdb_ids.children.count == 1
+      tmdb_id = tmdb_ids.first.text
+      maybe_imdb_id = @exclusions["tmdb_to_imdb"][tmdb_id]
+      return maybe_imdb_id if maybe_imdb_id
+    end
     ids = node.xpath('./id')
-    assert ids.children.count == 1, "found duplicate id node #{ids.text}"
+    assert ids.children.count <= 1, "found duplicate id node #{ids.text}"
+    assert ids.children.count >0, "missing id node for #{node.xpath('title').text}"
     id = ids.first.text
-    return id if id.match(/tt\d{7}/)
-    assert false, "could not find imdb id #{ids.text}"
+    return id.match(/tt\d{7}/) ? id : nil
   end
 
   def import_movie_node(node)
