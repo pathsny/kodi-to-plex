@@ -150,8 +150,9 @@ class Importer
     tmdb_ids = node.xpath('./uniqueid[@type="tmdb"]')
     if tmdb_ids.children.count == 1
       tmdb_id = tmdb_ids.first.text
-      maybe_imdb_id = @exclusions["tmdb_to_imdb"][tmdb_id]
-      return maybe_imdb_id if maybe_imdb_id
+      maybe_imdb_id = @exclusions["tmdb_to_imdb"][tmdb_id.to_s]
+      assert maybe_imdb_id, "tmdb id #{tmdb_id} for #{node.xpath('title').text} has no imdb mapping"
+      return maybe_imdb_id
     end
     ids = node.xpath('./id')
     assert ids.children.count <= 1, "found duplicate id node #{ids.text}"
@@ -163,6 +164,7 @@ class Importer
   def import_movie_node(node)
     last_played = DateTime.parse(node.xpath('./lastplayed/text()').text) rescue nil
     filenameandpath = node.xpath('./filenameandpath/text()').text
+    return if @exclusions["filenames_to_skip"].include?(filenameandpath)
     play_count = @exclusions["play_count_overrides"].fetch(
       filenameandpath,
       node.xpath('./playcount/text()').text.to_i,

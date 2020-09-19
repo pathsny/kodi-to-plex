@@ -17,7 +17,6 @@
 
 ## ToDo List
 - Movies
-  - load entire movie history
 - Handle TV Series
   - A seen episode marks the season as seen and the show as seen
   - test multi-ep series
