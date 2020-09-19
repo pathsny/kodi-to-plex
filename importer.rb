@@ -56,7 +56,7 @@ class Importer
   end
 
   def retrieve_metadata(video_data)
-    media_items = video_data[:filenameandpath].map do |name|
+    media_items = video_data[:filenameandpath_split].map do |name|
       media_file = @exclusions['filename_substitutions'].fetch(name, name).sub(
         @settings[:kodi_media_path_match],
         @settings[:plex_media_path_replace],
@@ -75,12 +75,18 @@ class Importer
   end
 
   def import_video(video_data)
-    invariant "last played and play stats must be consistent #{video_data[:filenameandpath]}" do
-      if video_data[:last_played].nil?
-        video_data[:play_count] == 0 && video_data[:position] == 0
-      else
-        video_data[:play_count] != 0 || video_data[:position] != 0
-      end
+    if video_data[:last_played].nil?
+      assert(
+        video_data[:play_count] == 0 && video_data[:position] == 0,
+        "#{video_data[:filenameandpath]} has play stats without last played",
+      )
+    else
+      assert(
+        video_data[:play_count] != 0 ||
+        video_data[:position] != 0 ||
+        @exclusions["allowed_missing_playstats"].include?(video_data[:filenameandpath]),
+        "#{video_data[:filenameandpath]} has no play stats even with last played",
+      )
     end
     return if video_data[:last_played].nil?
 
@@ -150,22 +156,28 @@ class Importer
 
   def import_movie_node(node)
     last_played = DateTime.parse(node.xpath('./lastplayed/text()').text) rescue nil
+    filenameandpath = node.xpath('./filenameandpath/text()').text
+    play_count = @exclusions["play_count_overrides"].fetch(
+      filenameandpath,
+      node.xpath('./playcount/text()').text.to_i,
+    )
     import_video(
       position: node.xpath('./resume/position/text()').text.to_i,
-      play_count: node.xpath('./playcount/text()').text.to_i,
+      play_count: play_count,
       last_played: last_played,
-      filenameandpath: node.xpath('./filenameandpath/text()').text.scan(FILE_MATCH_REGEX),
+      filenameandpath: filenameandpath,
+      filenameandpath_split: filenameandpath.scan(FILE_MATCH_REGEX),
       imdb: get_imdb_id(node),
     )
   end
 
-  def import_movie_node_from_path(path)
-    import_movie_node(get_kodi_data().xpath(path).first)
+  def import_movie_nodes_from_path(path)
+    get_kodi_data().xpath(path).map {|n|import_movie_node(n) }
   end
 
   def inspect
     "#<#{self.class}:#{object_id}>"
   end
 
-  attr_reader :settings
+  attr_reader :settings, :exclusions
 end
