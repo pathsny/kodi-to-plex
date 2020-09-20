@@ -5,7 +5,13 @@ source :rubygems
 
 gem 'nokogiri'
 gem 'sqlite3'
+gem 'json'
 gem 'activerecord'
 gem 'safe_attributes'
 gem 'solid_assert'
 gem 'diffy'
+
+
+group :development do
+  gem 'amazing_print'
+end

@@ -6,6 +6,11 @@ require 'solid_assert'
 SolidAssert.enable_assertions
 require File.join(__dir__, 'models')
 
+begin
+  require 'amazing_print'
+rescue LoadError
+end
+
 Object.send(:remove_const, :DATA_PATH) if Object.const_defined?(:DATA_PATH)
 DATA_PATH = File.join(__dir__, 'data')
 Object.send(:remove_const, :FILE_MATCH_REGEX) if Object.const_defined?(:FILE_MATCH_REGEX)
