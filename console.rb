@@ -1,12 +1,43 @@
 load File.join(__dir__, 'importer.rb')
-require File.join(DATA_PATH, 'test_imports')
+load File.join(DATA_PATH, 'test_imports.rb')
 
 def import_movies
   settings_file = File.read(File.join(DATA_PATH, 'settings.json'))
   settings = JSON.parse(settings_file, :symbolize_names => true)
   Importer.close()
-  importer = importer_with_test_inputs(settings)
+  importer = importer_with_test_inputs(settings, :movie)
   nil
+end
+
+def import_tv
+  settings_file = File.read(File.join(DATA_PATH, 'settings.json'))
+  settings = JSON.parse(settings_file, :symbolize_names => true)
+  Importer.close()
+  importer = importer_with_test_inputs(settings, :tv)
+  nil
+end
+
+def seen_tv
+  settings_file = File.read(File.join(DATA_PATH, 'settings.json'))
+  settings = JSON.parse(settings_file, :symbolize_names => true)
+  @doc = File.open(File.join(DATA_PATH, settings[:kodi_data])) {|f| Nokogiri::XML(f) }
+  seen = @doc.xpath('//tvshow')
+  seenh = {}
+  seen.each  do |s|
+    eps = s.xpath('episodedetails').map do |ep|
+      {
+        name: "S#{ep.xpath('season/text()').text}E#{ep.xpath('episode/text()').text}",
+        last_played: ep.xpath('lastplayed/text()').text
+      }
+    end
+
+    seenh[s.xpath('title/text()').text] = {
+      last_played: s.xpath('lastplayed/text()').text,
+      min: eps.min_by {|e| e[:last_played]},
+      max: eps.max_by {|e| e[:last_played]}
+    }
+  end
+  seenh
 end
 
 def reload_script

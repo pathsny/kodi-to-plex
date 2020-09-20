@@ -5,4 +5,5 @@ settings = JSON.parse(settings_file, :symbolize_names => true)
 importer = Importer.new(settings)
 importer.clear_tables
 importer.import_movie_nodes_from_path("//movie")
+importer.import_tv_nodes_from_path("//tvshow")
 Importer.close()
