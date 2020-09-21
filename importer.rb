@@ -83,7 +83,8 @@ class Importer
             assert imdb_id == video_data[:imdb], "Imdb does not match for #{m.title}. Plex has #{imdb_id} and Kodi has #{video_data[:imdb]}"
           end
         when :tv
-          match_data = m.guid.match(TVEP_MATCH_REGEX)&.named_captures.symbolize_keys
+          match_data = m.guid.match(TVEP_MATCH_REGEX)&.named_captures&.symbolize_keys
+          assert match_data, "guid #{m.guid} for #{video_data[:filenameandpath]} does not match the pattern to extract tvdb id"
           assert video_data[:tvdb] == match_data[:tvdb], "TVDB ID for #{video_data[:filenameandpath]} is #{video_data[:tvdb]} in kodi and #{match_data[:tvdb]} in plex"
           assert video_data[:season] == match_data[:season], "Season for #{video_data[:filenameandpath]} is #{video_data[:season]} in kodi and #{match_data[:season]} in plex"
           assert video_data[:episode] == match_data[:episode], "Episode for #{video_data[:filenameandpath]} is #{video_data[:episode]} in kodi and #{match_data[:episode]} in plex"
