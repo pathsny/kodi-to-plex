@@ -1,25 +1,27 @@
 load File.join(__dir__, 'importer.rb')
 load File.join(DATA_PATH, 'test_imports.rb')
 
-def import_movies
+def get_settings
   settings_file = File.read(File.join(DATA_PATH, 'settings.json'))
-  settings = JSON.parse(settings_file, :symbolize_names => true)
+  JSON.parse(settings_file, :symbolize_names => true).merge(
+    suppress_errors_till_end: false,
+  )
+end
+
+def import_movies
   Importer.close()
-  importer = importer_with_test_inputs(settings, :movie)
+  importer = importer_with_test_inputs(get_settings(), :movie)
   nil
 end
 
 def import_tv
-  settings_file = File.read(File.join(DATA_PATH, 'settings.json'))
-  settings = JSON.parse(settings_file, :symbolize_names => true)
   Importer.close()
-  importer = importer_with_test_inputs(settings, :tv)
+  importer = importer_with_test_inputs(get_settings(), :tv)
   nil
 end
 
 def seen_tv
-  settings_file = File.read(File.join(DATA_PATH, 'settings.json'))
-  settings = JSON.parse(settings_file, :symbolize_names => true)
+  settings = get_settings()
   @doc = File.open(File.join(DATA_PATH, settings[:kodi_data])) {|f| Nokogiri::XML(f) }
   seen = @doc.xpath('//tvshow')
   seenh = {}

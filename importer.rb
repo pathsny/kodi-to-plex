@@ -45,6 +45,7 @@ class Importer
   def initialize(settings)
     @settings = settings
     @exclusions = JSON.parse(File.read(File.join(DATA_PATH, 'exclusions.json')))
+    @assertions = []
   end
 
   def get_kodi_data
@@ -210,7 +211,6 @@ class Importer
     video_data[:episodes].each do |e|
       import_video(e, :tv)
     rescue StandardError => error
-      ap "was processing #{e[:filenameandpath]}"
       raise
     end
   end
@@ -234,6 +234,16 @@ class Importer
     }
     return if @exclusions["tv_shows_to_skip"].include?(info[:title])
     import_tv_videos(info)
+  end
+
+  def import_kodi_node(node, type)
+    assert [:movie, :tv].include?(type), "unknown #{type}"
+    case type
+    when :movie
+      import_movie_node(node)
+    when :tv
+      import_tv_node(node)
+    end
   end
 
   def extract_kodi_ep_info(node, tvdb_id)
@@ -281,17 +291,21 @@ class Importer
     return id.match(/tt\d{7}/) ? id : nil
   end
 
-  def import_movie_nodes_from_path(path)
-    get_kodi_data().xpath(path).map {|n|import_movie_node(n) }
-  end
-
-  def import_tv_nodes_from_path(path)
-    get_kodi_data().xpath(path).map {|n| import_tv_node(n)}
+  def import_kodi_nodes_from_xpath(path, type)
+    get_kodi_data().xpath(path).map do |n|
+      import_kodi_node(n, type)
+    rescue SolidAssert::AssertionFailedError => error
+      if @settings[:suppress_errors_till_end]
+        @assertions << error
+      else
+        raise
+      end
+    end
   end
 
   def inspect
     "#<#{self.class}:#{object_id}>"
   end
 
-  attr_reader :settings, :exclusions
+  attr_reader :settings, :exclusions, :assertions
 end

@@ -15,6 +15,7 @@ FileUtils.rm_f(output_db_path + '-shm')
 FileUtils.rm_f(output_db_path + '-wal')
 FileUtils.cp(ref_db_path, output_db_path)
 settings[:db_name] = 'test_output_db.db'
+settings[:suppress_errors_till_end] = false
 importer = importer_with_test_inputs(settings)
 Importer.close()
 
