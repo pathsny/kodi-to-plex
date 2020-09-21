@@ -92,19 +92,10 @@ class Importer
 
   def import_video(video_data, type)
     assert [:movie, :tv].include?(type), "unknown #{type} when importing video for #{video_data[:filenameandpath]}"
-    if video_data[:last_played].nil?
-      assert(
-        video_data[:play_count] == 0 && video_data[:position] == 0,
-        "#{video_data[:filenameandpath]} has play stats without last played",
-      )
-    else
-      assert(
-        video_data[:play_count] != 0 ||
-        video_data[:position] != 0 ||
-        @exclusions["allowed_missing_playstats"].include?(video_data[:filenameandpath]),
-        "#{video_data[:filenameandpath]} has no play stats even with last played",
-      )
-    end
+    assert(
+      video_data[:play_count] == 0 && video_data[:position] == 0,
+      "#{video_data[:filenameandpath]} has play stats without last played",
+    ) if video_data[:last_played].nil?
     return if @exclusions["filenames_to_skip"].include?(video_data[:filenameandpath])
     return if @exclusions["filename_extensions_to_skip"].include?(File.extname(video_data[:filenameandpath]))
     metadata_item = retrieve_metadata(video_data, type)
