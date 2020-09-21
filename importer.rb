@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'nokogiri'
 require 'sqlite3'
 require 'active_record'
@@ -14,29 +16,30 @@ end
 Object.send(:remove_const, :DATA_PATH) if Object.const_defined?(:DATA_PATH)
 DATA_PATH = File.join(__dir__, 'data')
 Object.send(:remove_const, :FILE_MATCH_REGEX) if Object.const_defined?(:FILE_MATCH_REGEX)
-FILE_MATCH_REGEX = %r{smb://.+?(?=\s,\ssmb://|$)}
+FILE_MATCH_REGEX = %r{smb://.+?(?=\s,\ssmb://|$)}.freeze
 Object.send(:remove_const, :IMDB_MATCH_REGEX) if Object.const_defined?(:IMDB_MATCH_REGEX)
-IMDB_MATCH_REGEX = %r{com.plexapp.agents.imdb://(?<imdb>.*)\?lang=en}
+IMDB_MATCH_REGEX = %r{com.plexapp.agents.imdb://(?<imdb>.*)\?lang=en}.freeze
 Object.send(:remove_const, :TVEP_MATCH_REGEX) if Object.const_defined?(:TVEP_MATCH_REGEX)
-TVEP_MATCH_REGEX = %r{com.plexapp.agents.thetvdb://(?<tvdb>\d*)/(?<season>.*)/(?<episode>.*)\?lang=en}
+TVEP_MATCH_REGEX = %r{com.plexapp.agents.thetvdb://(?<tvdb>\d*)/(?<season>.*)/(?<episode>.*)\?lang=en}.freeze
 
 class Importer
   class << self
     def new(settings)
-      raise "Can only create one instance" unless @instance.nil?
+      raise 'Can only create one instance' unless @instance.nil?
+
       @instance = super(settings)
       ActiveRecord::Base.establish_connection(
         adapter: 'sqlite3',
-        database: File.join(DATA_PATH, settings[:db_name])
+        database: File.join(DATA_PATH, settings[:db_name]),
       )
       @instance
     end
 
     def close
-      if @instance
-        ActiveRecord::Base.connection.close
-        @instance = nil
-      end
+      return unless @instance
+
+      ActiveRecord::Base.connection.close
+      @instance = nil
     end
 
     attr_reader :instance
@@ -49,7 +52,7 @@ class Importer
   end
 
   def get_kodi_data
-    @kodi_data ||= File.open(File.join(DATA_PATH, @settings[:kodi_data])) {|f| Nokogiri::XML(f) }
+    @kodi_data ||= File.open(File.join(DATA_PATH, @settings[:kodi_data])) { |f| Nokogiri::XML(f) }
   end
 
   def make_changed_at
@@ -70,36 +73,46 @@ class Importer
         @settings[:kodi_media_path_match],
         @settings[:plex_media_path_replace],
       )
-      MediaPart.only_one!(:file =>  media_file).media_item
+      MediaPart.only_one!(file: media_file).media_item
     end.uniq
     assert media_items.size == 1, "found #{media_items.size} items for #{video_data[:filenameandpath]}"
 
     media_items.first.metadata_item.tap do |m|
       # Let's make sure the metadata matches before we return it.
       case type
-        when :movie
-          unless @exclusions['known_imdb_mismatches'].include?(m.title)
-            imdb_id = m.guid.match(IMDB_MATCH_REGEX)&.named_captures&.dig('imdb')
-            assert imdb_id == video_data[:imdb], "Imdb does not match for #{m.title}. Plex has #{imdb_id} and Kodi has #{video_data[:imdb]}"
-          end
-        when :tv
-          match_data = m.guid.match(TVEP_MATCH_REGEX)&.named_captures&.symbolize_keys
-          assert match_data, "guid #{m.guid} for #{video_data[:filenameandpath]} does not match the pattern to extract tvdb id"
-          assert video_data[:tvdb] == match_data[:tvdb], "TVDB ID for #{video_data[:filenameandpath]} is #{video_data[:tvdb]} in kodi and #{match_data[:tvdb]} in plex"
-          assert video_data[:season] == match_data[:season], "Season for #{video_data[:filenameandpath]} is #{video_data[:season]} in kodi and #{match_data[:season]} in plex"
-          assert video_data[:episode] == match_data[:episode], "Episode for #{video_data[:filenameandpath]} is #{video_data[:episode]} in kodi and #{match_data[:episode]} in plex"
+      when :movie
+        unless @exclusions['known_imdb_mismatches'].include?(m.title)
+          imdb_id = m.guid.match(IMDB_MATCH_REGEX)&.named_captures&.dig('imdb')
+          assert(imdb_id == video_data[:imdb],
+                 "Imdb does not match for #{m.title}. Plex has #{imdb_id} and Kodi has #{video_data[:imdb]}",)
+        end
+      when :tv
+        match_data = m.guid.match(TVEP_MATCH_REGEX)&.named_captures&.symbolize_keys
+        assert(match_data,
+               "guid #{m.guid} for #{video_data[:filenameandpath]} does not match the pattern to extract tvdb id",)
+        assert(
+          video_data[:tvdb] == match_data[:tvdb],
+          "TVDB ID for #{video_data[:filenameandpath]} is #{video_data[:tvdb]} in kodi and #{match_data[:tvdb]} in plex",
+        )
+        assert(video_data[:season] == match_data[:season],
+               "Season for #{video_data[:filenameandpath]} is #{video_data[:season]} in kodi and #{match_data[:season]} in plex",)
+        assert(video_data[:episode] == match_data[:episode],
+               "Episode for #{video_data[:filenameandpath]} is #{video_data[:episode]} in kodi and #{match_data[:episode]} in plex",)
       end
     end
   end
 
   def import_video(video_data, type)
-    assert [:movie, :tv].include?(type), "unknown #{type} when importing video for #{video_data[:filenameandpath]}"
-    assert(
-      video_data[:play_count] == 0 && video_data[:position] == 0,
-      "#{video_data[:filenameandpath]} has play stats without last played",
-    ) if video_data[:last_played].nil?
-    return if @exclusions["filenames_to_skip"].include?(video_data[:filenameandpath])
-    return if @exclusions["filename_extensions_to_skip"].include?(File.extname(video_data[:filenameandpath]))
+    assert([:movie, :tv].include?(type), "unknown #{type} when importing video for #{video_data[:filenameandpath]}")
+    if video_data[:last_played].nil?
+      assert(
+        (video_data[:play_count]).zero? && (video_data[:position]).zero?,
+        "#{video_data[:filenameandpath]} has play stats without last played",
+      )
+    end
+    return if @exclusions['filenames_to_skip'].include?(video_data[:filenameandpath])
+    return if @exclusions['filename_extensions_to_skip'].include?(File.extname(video_data[:filenameandpath]))
+
     metadata_item = retrieve_metadata(video_data, type)
     return if video_data[:last_played].nil?
 
@@ -113,11 +126,11 @@ class Importer
       account_id: @settings[:account_id],
       last_viewed_at: [
         video_data[:last_played],
-        setting.last_viewed_at
+        setting.last_viewed_at,
       ].compact.max,
       created_at: [
         video_data[:last_played],
-        setting.created_at
+        setting.created_at,
       ].compact.min,
       updated_at: [
         video_data[:last_played],
@@ -126,9 +139,11 @@ class Importer
       view_count: video_data[:play_count] + (setting.view_count || 0),
       changed_at: make_changed_at(),
     }
-    setting.view_offset = (
-      video_data[:position] == 0 ? nil : video_data[:position]*1000
-    ) if setting.last_viewed_at_changed?
+    if setting.last_viewed_at_changed?
+      setting.view_offset = (
+        (video_data[:position]).zero? ? nil : video_data[:position] * 1000
+      )
+    end
     setting.save!
 
     parent = metadata_item.parent_id.nil? ? nil : MetadataItem.find(metadata_item.parent_id)
@@ -136,9 +151,11 @@ class Importer
 
     case type
     when :movie
-      assert(parent.nil? && grandparent.nil?, "Movies are expected to have nil parent. But not #{video_data[:filenameandpath]}")
+      assert(parent.nil? && grandparent.nil?,
+             "Movies are expected to have nil parent. But not #{video_data[:filenameandpath]}",)
     when :tv
-      assert(!(parent.nil? || grandparent.nil?), "TV Episodes must have a parent and grandparent, but not #{video_data[:filenameandpath]}")
+      assert(!(parent.nil? || grandparent.nil?),
+             "TV Episodes must have a parent and grandparent, but not #{video_data[:filenameandpath]}",)
     end
 
     if parent
@@ -147,17 +164,17 @@ class Importer
         account_id: @settings[:account_id],
         last_viewed_at: [
           video_data[:last_played],
-          parent_setting.last_viewed_at
+          parent_setting.last_viewed_at,
         ].compact.max,
         created_at: [
           video_data[:last_played],
-          parent_setting.created_at
+          parent_setting.created_at,
         ].compact.min,
         updated_at: [
           video_data[:last_played],
           parent_setting.updated_at,
         ].compact.max,
-        view_count: (video_data[:play_count] > 0 || (parent_setting.view_count&.> 0) ? 1 : 0),
+        view_count: ((video_data[:play_count]).positive? || (parent_setting.view_count&.> 0) ? 1 : 0),
         changed_at: make_changed_at(),
       }
       parent_setting.save!
@@ -169,26 +186,25 @@ class Importer
         account_id: @settings[:account_id],
         last_viewed_at: [
           video_data[:last_played],
-          grandparent_setting.last_viewed_at
+          grandparent_setting.last_viewed_at,
         ].compact.max,
         created_at: [
           video_data[:last_played],
-          grandparent_setting.created_at
+          grandparent_setting.created_at,
         ].compact.min,
         updated_at: [
           video_data[:last_played],
           grandparent_setting.updated_at,
         ].compact.max,
-        view_count: (video_data[:play_count] > 0 || (grandparent_setting.view_count &.> 0) ? 1 : 0),
+        view_count: ((video_data[:play_count]).positive? || (grandparent_setting.view_count &.> 0) ? 1 : 0),
         changed_at: make_changed_at(),
       }
       grandparent_setting.save!
     end
 
-    return if video_data[:play_count] == 0
+    return if (video_data[:play_count]).zero?
 
-    video_data[:play_count].times do |i|
-
+    video_data[:play_count].times do |_i|
       MetadataItemView.create!(
         account_id: @settings[:account_id],
         guid: metadata_item.guid,
@@ -209,9 +225,9 @@ class Importer
   end
 
   def import_tv_videos(video_data)
-    video_data[:episodes].each do |e|
-      import_video(e, :tv)
-    rescue StandardError => error
+    video_data[:episodes].each do |episode|
+      import_video(episode, :tv)
+    rescue StandardError => e
       raise
     end
   end
@@ -227,13 +243,14 @@ class Importer
 
   def import_tv_node(node)
     tvdb_id = node.xpath('uniqueid[@default]/text()').text
-    episodes = node.xpath('episodedetails').map {|n| extract_kodi_ep_info(n, tvdb_id)}
+    episodes = node.xpath('episodedetails').map { |n| extract_kodi_ep_info(n, tvdb_id) }
     info = {
       tvdb: tvdb_id,
       **extract_base_video_info(node),
       episodes: episodes,
     }
-    return if @exclusions["tv_shows_to_skip"].include?(info[:title])
+    return if @exclusions['tv_shows_to_skip'].include?(info[:title])
+
     import_tv_videos(info)
   end
 
@@ -259,11 +276,11 @@ class Importer
 
   def extract_base_video_info(node)
     filenameandpath = node.xpath('./filenameandpath/text()').text
-    return {
+    {
       filenameandpath: filenameandpath,
       filenameandpath_split: filenameandpath.scan(FILE_MATCH_REGEX),
       last_played: (DateTime.parse(node.xpath('lastplayed/text()').text) rescue nil),
-      play_count: @exclusions["play_count_overrides"].fetch(
+      play_count: @exclusions['play_count_overrides'].fetch(
         filenameandpath,
         node.xpath('./playcount/text()').text.to_i,
       ),
@@ -272,35 +289,34 @@ class Importer
   end
 
   def extract_position(node)
-    {position: node.xpath('./resume/position/text()').text.to_i}
+    { position: node.xpath('./resume/position/text()').text.to_i }
   end
 
   def extract_imdb_id(node)
     unique_ids = node.xpath('./uniqueid[@type="imdb"]')
     return unique_ids.first.text if unique_ids.children.count == 1
+
     tmdb_ids = node.xpath('./uniqueid[@type="tmdb"]')
     if tmdb_ids.children.count == 1
       tmdb_id = tmdb_ids.first.text
-      maybe_imdb_id = @exclusions["tmdb_to_imdb"][tmdb_id.to_s]
+      maybe_imdb_id = @exclusions['tmdb_to_imdb'][tmdb_id.to_s]
       assert maybe_imdb_id, "tmdb id #{tmdb_id} for #{node.xpath('title').text} has no imdb mapping"
       return maybe_imdb_id
     end
     ids = node.xpath('./id')
     assert ids.children.count <= 1, "found duplicate id node #{ids.text}"
-    assert ids.children.count >0, "missing id node for #{node.xpath('title').text}"
+    assert ids.children.count.positive?, "missing id node for #{node.xpath('title').text}"
     id = ids.first.text
-    return id.match(/tt\d{7}/) ? id : nil
+    id.match(/tt\d{7}/) ? id : nil
   end
 
   def import_kodi_nodes_from_xpath(path, type)
     get_kodi_data().xpath(path).map do |n|
       import_kodi_node(n, type)
-    rescue SolidAssert::AssertionFailedError => error
-      if @settings[:suppress_errors_till_end]
-        @assertions << error
-      else
-        raise
-      end
+    rescue SolidAssert::AssertionFailedError => e
+      raise unless @settings[:suppress_errors_till_end]
+
+      @assertions << e
     end
   end
 

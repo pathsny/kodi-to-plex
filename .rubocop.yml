@@ -1,0 +1,92 @@
+inherit_from: .rubocop_todo.yml
+
+Style/HashSyntax:
+  EnforcedStyle: ruby19_no_mixed_keys
+
+Style/TrailingCommaInArrayLiteral:
+  EnforcedStyleForMultiline: consistent_comma
+
+Style/TrailingCommaInHashLiteral:
+  EnforcedStyleForMultiline: consistent_comma
+
+Style/TrailingCommaInArguments:
+  EnforcedStyleForMultiline: consistent_comma
+
+Style/SymbolArray:
+  Enabled: false
+
+Style/RedundantSelf:
+  Enabled: false
+
+Style/MethodCallWithoutArgsParentheses:
+  Enabled: false
+
+Style/RescueModifier:
+  Enabled: false
+
+Layout/ArgumentAlignment:
+  Enabled: true
+
+Layout/BlockAlignment:
+  Enabled: true
+
+Layout/BlockDelimiters:
+  Enabled: true
+
+Layout/BlockEndNewline:
+  Enabled: true
+
+Layout/ClosingParenthesisIndentation:
+  Enabled: true
+
+Layout/FirstArgumentIndentation:
+  Enabled: true
+
+Layout/FirstArrayElementIndentation:
+  Enabled: true
+
+Layout/FirstHashElementIndentation:
+  Enabled: true
+
+Layout/FirstParameterIndentation:
+  Enabled: true
+  EnforcedStyle: align_parentheses
+
+Layout/HashAlignment:
+  Enabled: true
+
+Layout/IndentationWidth:
+  Enabled: true
+
+Layout/MultilineArrayLineBreaks:
+  Enabled: true
+
+Layout/MultilineBlockLayout:
+  Enabled: true
+
+Layout/MultilineHashBraceLayout:
+  Enabled: true
+
+Layout/MultilineHashKeyLineBreaks:
+  Enabled: true
+
+Layout/MultilineMethodArgumentLineBreaks:
+  Enabled: true
+
+Layout/ParameterAlignment:
+  Enabled: true
+
+Lint/SuppressedException:
+  Enabled: false
+
+Lint/UselessAssignment:
+  Enabled: false
+
+Naming/AccessorMethodName:
+  Enabled: false
+
+Naming/MemoizedInstanceVariableName:
+  Enabled: false
+
+Style/Documentation:
+  Enabled: false

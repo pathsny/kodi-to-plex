@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'safe_attributes/base'
 require 'solid_assert'
 
@@ -15,15 +17,13 @@ module ActiveRecordOnlyOne
   end
 end
 
-ActiveRecord::Base.send(:include, ActiveRecordOnlyOne)
+ActiveRecord::Base.include ActiveRecordOnlyOne
 
 class MediaPart < ActiveRecord::Base
   belongs_to :media_item
 
   include SafeAttributes::Base
   bad_attribute_names :hash
-
-
 end
 
 class MediaItem < ActiveRecord::Base
@@ -42,5 +42,5 @@ class MetadataItemView < ActiveRecord::Base
 end
 
 class MetadataItemSetting < ActiveRecord::Base
-  validates :guid, :uniqueness => true
+  validates :guid, uniqueness: true
 end
