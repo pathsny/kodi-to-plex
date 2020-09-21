@@ -14,11 +14,11 @@ end
 Object.send(:remove_const, :DATA_PATH) if Object.const_defined?(:DATA_PATH)
 DATA_PATH = File.join(__dir__, 'data')
 Object.send(:remove_const, :FILE_MATCH_REGEX) if Object.const_defined?(:FILE_MATCH_REGEX)
-FILE_MATCH_REGEX = /smb:\/\/.+?(?=\s,\ssmb:\/\/|$)/
+FILE_MATCH_REGEX = %r{smb://.+?(?=\s,\ssmb://|$)}
 Object.send(:remove_const, :IMDB_MATCH_REGEX) if Object.const_defined?(:IMDB_MATCH_REGEX)
-IMDB_MATCH_REGEX = /com.plexapp.agents.imdb:\/\/(?<imdb>.*)\?lang=en/
+IMDB_MATCH_REGEX = %r{com.plexapp.agents.imdb://(?<imdb>.*)\?lang=en}
 Object.send(:remove_const, :TVEP_MATCH_REGEX) if Object.const_defined?(:TVEP_MATCH_REGEX)
-TVEP_MATCH_REGEX = /com.plexapp.agents.thetvdb:\/\/(?<tvdb>\d*)\/(?<season>.*)\/(?<episode>.*)\?lang=en/
+TVEP_MATCH_REGEX = %r{com.plexapp.agents.thetvdb://(?<tvdb>\d*)/(?<season>.*)/(?<episode>.*)\?lang=en}
 
 class Importer
   class << self
