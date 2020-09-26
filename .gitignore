@@ -57,3 +57,5 @@ build-iPhoneSimulator/
 .DS_Store
 /data
 kodi-to-plex.code-workspace
+.gitsecret/keys/random_seed
+!*.secret
