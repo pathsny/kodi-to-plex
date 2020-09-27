@@ -2,6 +2,7 @@
 
 require 'safe_attributes/base'
 require 'solid_assert'
+require File.join(__dir__, 'changed_at')
 
 ActiveRecord::Base.record_timestamps = false
 
@@ -45,4 +46,8 @@ end
 
 class MetadataItemSetting < ActiveRecord::Base
   validates :guid, uniqueness: true
+
+  before_save do
+    self.changed_at = ChangedAt.make()
+  end
 end

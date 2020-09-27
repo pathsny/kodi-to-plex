@@ -90,3 +90,6 @@ Naming/MemoizedInstanceVariableName:
 
 Style/Documentation:
   Enabled: false
+
+Style/DefWithParentheses:
+  Enabled: false

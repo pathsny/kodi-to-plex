@@ -9,7 +9,7 @@ require File.join(DATA_PATH, 'test_imports')
 
 options = {}
 OptionParser.new do |opts|
-  opts.banner = "Usage: example.rb [options]"
+  opts.banner = 'Usage: example.rb [options]'
 
   opts.on('-s', '--save', 'Save') do
     options[:save] = true

@@ -5,7 +5,9 @@ require 'sqlite3'
 require 'active_record'
 require 'json'
 require 'solid_assert'
+
 SolidAssert.enable_assertions
+require File.join(__dir__, 'changed_at')
 require File.join(__dir__, 'models')
 
 begin
@@ -47,6 +49,7 @@ class Importer
 
   def initialize(settings)
     @settings = settings
+    ChangedAt.init(settings)
     @exclusions = JSON.parse(File.read(File.join(DATA_PATH, 'exclusions.json')))
     @assertions = []
     @multi_ep_files = {}
@@ -54,12 +57,6 @@ class Importer
 
   def get_kodi_data
     @kodi_data ||= File.open(File.join(DATA_PATH, @settings[:kodi_data])) { |f| Nokogiri::XML(f) }
-  end
-
-  def make_changed_at
-    changed_at = @settings[:changed_at] || @settings[:changed_at_seed]
-    @settings[:changed_at] = changed_at + @settings[:changed_at_skip]
-    changed_at
   end
 
   def clear_tables
@@ -75,7 +72,7 @@ class Importer
       )
     end
     metadata_items = MetadataItem.joins(media_items: [:media_parts]).where(
-      media_items: { media_parts: { file: media_files }},
+      media_items: { media_parts: { file: media_files } },
     ).distinct
   end
 
@@ -192,7 +189,6 @@ class Importer
         setting.updated_at,
       ].compact.max,
       view_count: video_data[:play_count] + (setting.view_count || 0),
-      changed_at: make_changed_at(),
     }
     if setting.last_viewed_at_changed?
       setting.view_offset = (
@@ -230,7 +226,6 @@ class Importer
           parent_setting.updated_at,
         ].compact.max,
         view_count: ((video_data[:play_count]).positive? || (parent_setting.view_count&.> 0) ? 1 : 0),
-        changed_at: make_changed_at(),
       }
       parent_setting.save!
     end
@@ -252,7 +247,6 @@ class Importer
           grandparent_setting.updated_at,
         ].compact.max,
         view_count: ((video_data[:play_count]).positive? || (grandparent_setting.view_count &.> 0) ? 1 : 0),
-        changed_at: make_changed_at(),
       }
       grandparent_setting.save!
     end
