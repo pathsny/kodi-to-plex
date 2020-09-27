@@ -66,39 +66,74 @@ class Importer
     MetadataItemView.delete_all
   end
 
-  def retrieve_metadata(video_data, type)
-    assert [:movie, :tv].include?(type), "unknown #{type} when retrieving metadata for #{video_data[:filenameandpath]}"
-    media_items = video_data[:filenameandpath_split].map do |name|
-      media_file = @exclusions['filename_substitutions'].fetch(name, name).sub(
+  def retrieve_metadata_items_for_file(video_data)
+    media_files = video_data[:filenameandpath_split].map do |name|
+      @exclusions['filename_substitutions'].fetch(name, name).sub(
         @settings[:kodi_media_path_match],
         @settings[:plex_media_path_replace],
       )
-      MediaPart.only_one!(file: media_file).media_item
-    end.uniq
-    assert media_items.size == 1, "found #{media_items.size} items for #{video_data[:filenameandpath]}"
+    end
+    metadata_items = MetadataItem.joins(media_items: [:media_parts]).where(
+      media_items: { media_parts: { file: media_files }},
+    ).includes(:parent).distinct
+  end
 
-    media_items.first.metadata_item.tap do |m|
-      # Let's make sure the metadata matches before we return it.
-      case type
-      when :movie
-        unless @exclusions['known_imdb_mismatches'].include?(m.title)
-          imdb_id = m.guid.match(IMDB_MATCH_REGEX)&.named_captures&.dig('imdb')
-          assert(imdb_id == video_data[:imdb],
-                 "Imdb does not match for #{m.title}. Plex has #{imdb_id} and Kodi has #{video_data[:imdb]}",)
-        end
-      when :tv
-        match_data = m.guid.match(TVEP_MATCH_REGEX)&.named_captures&.symbolize_keys
-        assert(match_data,
-               "guid #{m.guid} for #{video_data[:filenameandpath]} does not match the pattern to extract tvdb id",)
+  def retrieve_movie_metadata(video_data)
+    metadata_items = retrieve_metadata_items_for_file(video_data)
+    assert metadata_items.size == 1, "found #{metadata_items.size} items for #{video_data[:filenameandpath]}"
+    metadata_items.first.tap do |metadata_item|
+      unless @exclusions['known_imdb_mismatches'].include?(metadata_item.title)
+
+        imdb_id = metadata_item.guid.match(IMDB_MATCH_REGEX)&.named_captures&.dig('imdb')
         assert(
-          video_data[:tvdb] == match_data[:tvdb],
-          "TVDB ID for #{video_data[:filenameandpath]} is #{video_data[:tvdb]} in kodi and #{match_data[:tvdb]} in plex",
+          imdb_id == video_data[:imdb],
+          "Imdb does not match for #{metadata_item.title}. Plex has #{imdb_id} and Kodi has #{video_data[:imdb]}",
         )
-        assert(video_data[:season] == match_data[:season],
-               "Season for #{video_data[:filenameandpath]} is #{video_data[:season]} in kodi and #{match_data[:season]} in plex",)
-        assert(video_data[:episode] == match_data[:episode],
-               "Episode for #{video_data[:filenameandpath]} is #{video_data[:episode]} in kodi and #{match_data[:episode]} in plex",)
       end
+    end
+  end
+
+  def retrieve_tv_metadata(video_data)
+    metadata_items = retrieve_metadata_items_for_file(video_data)
+    assert metadata_items.size == 1, "found #{metadata_items.size} items for #{video_data[:filenameandpath]}"
+
+    metadata_items.first.tap do |metadata_item|
+      match_data = metadata_item.guid.match(TVEP_MATCH_REGEX)&.named_captures&.symbolize_keys
+      assert(
+        match_data,
+        "guid #{metadata_item.guid} for #{video_data[:filenameandpath]} does not match the pattern to extract tvdb id",
+      )
+      assert(
+        video_data[:tvdb] == match_data[:tvdb],
+        "TVDB ID for #{video_data[:filenameandpath]} is #{video_data[:tvdb]} in kodi and #{match_data[:tvdb]} in plex",
+      )
+      assert(
+        video_data[:season] == match_data[:season].to_i,
+        "GUID Mismatch: Season for #{video_data[:filenameandpath]} is #{video_data[:season]} in kodi and #{match_data[:season]} in plex guid",
+      )
+      assert(
+        video_data[:season] == metadata_item.parent.index,
+        "Metadata Mismatch: Season for #{video_data[:filenameandpath]} is #{video_data[:season]} in kodi and #{metadata_item.parent.index} in plex metadata",
+      )
+      assert(
+        video_data[:episode] == match_data[:episode].to_i,
+        "GUID Mismatch: Episode for #{video_data[:filenameandpath]} is #{video_data[:episode]} in kodi and #{match_data[:episode]} in plex",
+      )
+      assert(
+        video_data[:episode] == metadata_item.index,
+        "Metadata Mismatch: Episode for #{video_data[:filenameandpath]} is #{video_data[:episode]} in kodi and #{metadata_item.index} in plex",
+      )
+    end
+  end
+
+  def retrieve_metadata(video_data, type)
+    case type
+    when :movie
+      retrieve_movie_metadata(video_data)
+    when :tv
+      retrieve_tv_metadata(video_data)
+    else
+      assert true, "unknown #{type} when retrieving metadata for #{video_data[:filenameandpath]}"
     end
   end
 
@@ -266,8 +301,8 @@ class Importer
 
   def extract_kodi_ep_info(node, tvdb_id)
     {
-      season: node.xpath('season').text,
-      episode: node.xpath('episode').text,
+      season: node.xpath('season').text.to_i,
+      episode: node.xpath('episode').text.to_i,
       tvdb: tvdb_id,
       **extract_base_video_info(node),
       **extract_position(node),
