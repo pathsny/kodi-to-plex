@@ -195,7 +195,7 @@ class Importer
         (video_data[:position]).zero? ? nil : video_data[:position] * 1000
       )
     end
-    setting.save!
+    setting.save! if setting.changed?
 
     parent = metadata_item.parent
     grandparent = parent&.parent
@@ -227,7 +227,7 @@ class Importer
         ].compact.max,
         view_count: ((video_data[:play_count]).positive? || (parent_setting.view_count&.> 0) ? 1 : 0),
       }
-      parent_setting.save!
+      parent_setting.save! if parent_setting.changed?
     end
 
     if grandparent
@@ -248,7 +248,7 @@ class Importer
         ].compact.max,
         view_count: ((video_data[:play_count]).positive? || (grandparent_setting.view_count &.> 0) ? 1 : 0),
       }
-      grandparent_setting.save!
+      grandparent_setting.save! if grandparent_setting.changed?
     end
 
     return if (video_data[:play_count]).zero?

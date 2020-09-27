@@ -46,6 +46,7 @@ end
 
 class MetadataItemSetting < ActiveRecord::Base
   validates :guid, uniqueness: true
+  validates :changed_at, uniqueness: true
 
   before_save do
     self.changed_at = ChangedAt.make()
