@@ -10,6 +10,10 @@ def get_settings
   )
 end
 
+def make_importer
+  Importer.new(get_settings())
+end
+
 def import_movies
   Importer.close()
   importer = importer_with_test_inputs(get_settings(), :movie)
