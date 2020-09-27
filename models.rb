@@ -33,6 +33,8 @@ end
 
 class MetadataItem < ActiveRecord::Base
   has_many :media_items
+  belongs_to :parent, class_name: self.name
+  has_many :children, class_name: self.name, foreign_key: 'parent_id'
 
   include SafeAttributes::Base
   bad_attribute_names :hash

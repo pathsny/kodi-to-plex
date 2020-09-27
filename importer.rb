@@ -146,8 +146,8 @@ class Importer
     end
     setting.save!
 
-    parent = metadata_item.parent_id.nil? ? nil : MetadataItem.find(metadata_item.parent_id)
-    grandparent = parent&.parent_id.nil? ? nil : MetadataItem.find(parent.parent_id)
+    parent = metadata_item.parent
+    grandparent = parent&.parent
 
     case type
     when :movie
