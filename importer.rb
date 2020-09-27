@@ -49,6 +49,7 @@ class Importer
     @settings = settings
     @exclusions = JSON.parse(File.read(File.join(DATA_PATH, 'exclusions.json')))
     @assertions = []
+    @multi_ep_files = {}
   end
 
   def get_kodi_data
@@ -66,7 +67,7 @@ class Importer
     MetadataItemView.delete_all
   end
 
-  def retrieve_metadata_items_for_file(video_data)
+  def metadata_items_for_file_query(video_data)
     media_files = video_data[:filenameandpath_split].map do |name|
       @exclusions['filename_substitutions'].fetch(name, name).sub(
         @settings[:kodi_media_path_match],
@@ -75,11 +76,11 @@ class Importer
     end
     metadata_items = MetadataItem.joins(media_items: [:media_parts]).where(
       media_items: { media_parts: { file: media_files }},
-    ).includes(:parent).distinct
+    ).distinct
   end
 
   def retrieve_movie_metadata(video_data)
-    metadata_items = retrieve_metadata_items_for_file(video_data)
+    metadata_items = metadata_items_for_file_query(video_data)
     assert metadata_items.size == 1, "found #{metadata_items.size} items for #{video_data[:filenameandpath]}"
     metadata_items.first.tap do |metadata_item|
       unless @exclusions['known_imdb_mismatches'].include?(metadata_item.title)
@@ -94,10 +95,37 @@ class Importer
   end
 
   def retrieve_tv_metadata(video_data)
-    metadata_items = retrieve_metadata_items_for_file(video_data)
-    assert metadata_items.size == 1, "found #{metadata_items.size} items for #{video_data[:filenameandpath]}"
+    metadata_items = metadata_items_for_file_query(video_data).includes(:parent)
+    metadata_items_for_episode = metadata_items.filter do |m|
+      m.index == video_data[:episode] &&
+        m.parent.index == video_data[:season]
+    end
+    assert(
+      metadata_items_for_episode.size == 1,
+      "found #{metadata_items_for_episode.size} items for #{video_data[:filenameandpath]}",
+    )
 
-    metadata_items.first.tap do |metadata_item|
+    if metadata_items.size > 1 # This is a multi-episode file. Let's make sure they're consistent
+      if @multi_ep_files.key?(video_data[:filenameandpath])
+        previous = @multi_ep_files[video_data[:filenameandpath]]
+        assert(
+          video_data[:play_count] == previous[:play_count],
+          "Inconsistent play count for multiepfile #{video_data[:filenameandpath]}. Current metadata has #{video_data[:play_count]} but was #{previous[:play_count]}",
+        )
+        assert(
+          video_data[:position] == previous[:position],
+          "Inconsistent play count for multiepfile #{video_data[:filenameandpath]}. Current metadata has #{video_data[:position]} but was #{previous[:position]}",
+        )
+        assert(
+          video_data[:last_played] == previous[:last_played],
+          "Inconsistent play count for multiepfile #{video_data[:filenameandpath]}. Current metadata has #{video_data[:last_played]} but was #{previous[:last_played]}",
+        )
+      else
+        @multi_ep_files[video_data[:filenameandpath]] = video_data
+      end
+    end
+
+    metadata_items_for_episode.first.tap do |metadata_item|
       match_data = metadata_item.guid.match(TVEP_MATCH_REGEX)&.named_captures&.symbolize_keys
       assert(
         match_data,
@@ -109,19 +137,11 @@ class Importer
       )
       assert(
         video_data[:season] == match_data[:season].to_i,
-        "GUID Mismatch: Season for #{video_data[:filenameandpath]} is #{video_data[:season]} in kodi and #{match_data[:season]} in plex guid",
-      )
-      assert(
-        video_data[:season] == metadata_item.parent.index,
-        "Metadata Mismatch: Season for #{video_data[:filenameandpath]} is #{video_data[:season]} in kodi and #{metadata_item.parent.index} in plex metadata",
+        "GUID Mismatch: Season for #{video_data[:filenameandpath]} is #{video_data[:season]} in kodi and #{match_data[:season]} in plex. #{metadata_item.guid}",
       )
       assert(
         video_data[:episode] == match_data[:episode].to_i,
-        "GUID Mismatch: Episode for #{video_data[:filenameandpath]} is #{video_data[:episode]} in kodi and #{match_data[:episode]} in plex",
-      )
-      assert(
-        video_data[:episode] == metadata_item.index,
-        "Metadata Mismatch: Episode for #{video_data[:filenameandpath]} is #{video_data[:episode]} in kodi and #{metadata_item.index} in plex",
+        "GUID Mismatch: Episode for #{video_data[:filenameandpath]} is #{video_data[:episode]} in kodi and #{match_data[:episode]} in plex. #{metadata_item.guid}",
       )
     end
   end
