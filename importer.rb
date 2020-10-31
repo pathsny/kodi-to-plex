@@ -131,7 +131,7 @@ class Importer
       assert(
         video_data[:tvdb] == match_data[:tvdb],
         "TVDB ID for #{video_data[:filenameandpath]} is #{video_data[:tvdb]} in kodi and #{match_data[:tvdb]} in plex",
-      )
+      ) unless @exclusions['known_tvdb_mismatches'].include?(metadata_item.parent.parent.title)
       assert(
         video_data[:season] == match_data[:season].to_i,
         "GUID Mismatch: Season for #{video_data[:filenameandpath]} is #{video_data[:season]} in kodi and #{match_data[:season]} in plex. #{metadata_item.guid}",
