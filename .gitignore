@@ -55,7 +55,14 @@ build-iPhoneSimulator/
 # Used by RuboCop. Remote config files pulled in from inherit_from directive.
 # .rubocop-https?--*
 .DS_Store
-/data
 kodi-to-plex.code-workspace
 .gitsecret/keys/random_seed
-!*.secret
+data/*
+!data/*.secret
+data/db_diff.sql
+data/anime_videodb.xml
+data/exclusions.json
+data/settings.json
+data/test_imports.rb
+data/videodb.xml
+data/test_db.db
