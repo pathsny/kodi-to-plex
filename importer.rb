@@ -55,8 +55,8 @@ class Importer
     @multi_ep_files = {}
   end
 
-  def get_kodi_data
-    @kodi_data ||= File.open(File.join(DATA_PATH, @settings[:kodi_data])) { |f| Nokogiri::XML(f) }
+  def get_kodi_data(kodi_data_type)
+    @kodi_data ||= File.open(File.join(DATA_PATH, @settings[:kodi_data][kodi_data_type])) { |f| Nokogiri::XML(f) }
   end
 
   def clear_tables
@@ -359,8 +359,8 @@ class Importer
     id.match(/tt\d{7}/) ? id : nil
   end
 
-  def import_kodi_nodes_from_xpath(path, type)
-    get_kodi_data().xpath(path).map do |n|
+  def import_kodi_nodes_from_xpath(path, kodi_data_type, type)
+    get_kodi_data(kodi_data_type).xpath(path).map do |n|
       import_kodi_node(n, type)
     rescue SolidAssert::AssertionFailedError => e
       raise unless @settings[:suppress_errors_till_end]

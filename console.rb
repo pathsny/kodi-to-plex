@@ -28,7 +28,7 @@ end
 
 def seen_tv
   settings = get_settings()
-  @doc = File.open(File.join(DATA_PATH, settings[:kodi_data])) { |f| Nokogiri::XML(f) }
+  @doc = File.open(File.join(DATA_PATH, settings[:kodi_data][:live_action])) { |f| Nokogiri::XML(f) }
   seen = @doc.xpath('//tvshow')
   seenh = {}
   seen.each do |s|
