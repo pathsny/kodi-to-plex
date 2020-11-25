@@ -17,13 +17,13 @@ end
 
 def import_movies
   Importer.close()
-  importer = importer_with_test_inputs(get_settings(), :movie)
+  importer = importer_with_test_inputs(get_settings(), live_action: [:movie])
   nil
 end
 
 def import_tv
   Importer.close()
-  importer = importer_with_test_inputs(get_settings(), :tv)
+  importer = importer_with_test_inputs(get_settings(), live_action: [:tv])
   nil
 end
 
