@@ -55,10 +55,11 @@ class Importer
     @exclusions = JSON.parse(File.read(File.join(DATA_PATH, 'exclusions.json')))
     @assertions = []
     @multi_ep_files = {}
+    @kodi_data = {}
   end
 
   def get_kodi_data(kodi_data_type)
-    @kodi_data ||= File.open(File.join(DATA_PATH, @settings[:kodi_data][kodi_data_type])) { |f| Nokogiri::XML(f) }
+    @kodi_data[kodi_data_type] ||= File.open(File.join(DATA_PATH, @settings[:kodi_data][kodi_data_type])) { |f| Nokogiri::XML(f) }
   end
 
   def clear_tables
@@ -90,6 +91,22 @@ class Importer
           "Imdb does not match for #{metadata_item.title}. Plex has #{imdb_id} and Kodi has #{video_data[:imdb]}",
         )
       end
+    end
+  end
+
+  def retrieve_anime_movie_metadata(video_data)
+    metadata_items = metadata_items_for_file_query(video_data)
+    if (metadata_items.size > 1)
+      ap metadata_items
+    end
+    assert(metadata_items.size == 1, "found #{metadata_items.size} items for #{video_data[:filenameandpath]}")
+    metadata_items.first.tap do |metadata_item|
+      anidb_id = metadata_item.guid.match(ANIDB_MATCH_REGEX)&.named_captures&.dig('anidb')
+      assert(
+        anidb_id == video_data[:anidb],
+        "Anidb does not match for #{metadata_item.title}. Plex has #{anidb_id} and Kodi has #{video_data[:anidb]}",
+      )
+      assert(metadata_item.parent.index == 1, 'movies only have one season')
     end
   end
 
@@ -145,19 +162,22 @@ class Importer
     end
   end
 
-  def retrieve_metadata(video_data, type)
-    case type
-    when :movie
+  def retrieve_metadata(video_data, kodi_data_type, type)
+    case [kodi_data_type, type]
+    when [:live_action, :movie]
       retrieve_movie_metadata(video_data)
-    when :tv
+    when [:anime, :movie]
+      retrieve_anime_movie_metadata(video_data)
+    when [:live_action, :tv]
       retrieve_tv_metadata(video_data)
     else
-      assert true, "unknown #{type} when retrieving metadata for #{video_data[:filenameandpath]}"
+      assert true, "unknown media type #{type} and kodi data type #{kodi_data_type} combination  when retrieving metadata for #{video_data[:filenameandpath]}"
     end
   end
 
-  def import_video(video_data, type)
-    assert([:movie, :tv].include?(type), "unknown #{type} when importing video for #{video_data[:filenameandpath]}")
+  def import_video(video_data, kodi_data_type, type)
+    assert([:movie, :tv].include?(type), "unknown media type #{type} when importing video for #{video_data[:filenameandpath]}")
+    assert([:live_action, :anime].include?(kodi_data_type), "unknown kodi data type #{kodi_data_type} when importing video for #{video_data[:filenameandpath]}")
     if video_data[:last_played].nil?
       assert(
         (video_data[:play_count]).zero? && (video_data[:position]).zero?,
@@ -167,7 +187,7 @@ class Importer
     return if @exclusions['filenames_to_skip'].include?(video_data[:filenameandpath])
     return if @exclusions['filename_extensions_to_skip'].include?(File.extname(video_data[:filenameandpath]))
 
-    metadata_item = retrieve_metadata(video_data, type)
+    metadata_item = retrieve_metadata(video_data, kodi_data_type, type)
     return if video_data[:last_played].nil?
 
     # How we handle duplicate records
@@ -202,13 +222,13 @@ class Importer
     parent = metadata_item.parent
     grandparent = parent&.parent
 
-    case type
-    when :movie
+    case [kodi_data_type, type]
+    when [:live_action, :movie]
       assert(parent.nil? && grandparent.nil?,
-             "Movies are expected to have nil parent. But not #{video_data[:filenameandpath]}",)
-    when :tv
+             "Live Action Movies are expected to have nil parent. But not #{video_data[:filenameandpath]}",)
+    when [:anime, :movie], [:live_action, :tv], [:anime, :tv]
       assert(!(parent.nil? || grandparent.nil?),
-             "TV Episodes must have a parent and grandparent, but not #{video_data[:filenameandpath]}",)
+             "TV Episodes or Anime must have a parent and grandparent, but not #{video_data[:filenameandpath]}",)
     end
 
     if parent
@@ -277,7 +297,7 @@ class Importer
 
   def import_tv_videos(video_data)
     video_data[:episodes].each do |episode|
-      import_video(episode, :tv)
+      import_video(episode, :live_action, :tv)
     rescue StandardError => e
       raise
     end
@@ -289,7 +309,16 @@ class Importer
       **extract_position(node),
       **extract_base_video_info(node),
     }
-    import_video(info, :movie)
+    import_video(info, :live_action, :movie)
+  end
+
+  def import_anime_movie_node(node)
+    info = {
+      anidb: extract_anidb_id(node),
+      **extract_position(node),
+      **extract_base_video_info(node),
+    }
+    import_video(info, :anime, :movie)
   end
 
   def import_tv_node(node)
@@ -305,11 +334,14 @@ class Importer
     import_tv_videos(info)
   end
 
-  def import_kodi_node(node, type)
-    assert [:movie, :tv].include?(type), "unknown #{type}"
-    case type
-    when :movie
+  def import_kodi_node(node, kodi_data_type, type)
+    assert [:movie, :tv].include?(type), "unknown type of media in kodi library #{type}"
+    assert [:live_action, :anime].include?(kodi_data_type), "unknown kodi data type #{kodi_data_type}"
+    case [type, kodi_data_type]
+    when [:movie, :live_action]
       import_movie_node(node)
+    when [:movie, :anime]
+      import_anime_movie_node(node)
     when :tv
       import_tv_node(node)
     end
@@ -361,9 +393,18 @@ class Importer
     id.match(/tt\d{7}/) ? id : nil
   end
 
+  def extract_anidb_id(node)
+    ids = node.xpath('./id')
+    assert ids.children.count <= 1, "found duplicate id node #{ids.text}"
+    assert ids.children.count.positive?, "missing id node for #{node.xpath('title').text}"
+    id = ids.first.text
+    assert id.match(/\d+/), "invalid anidb id #{id} for #{node.xpath('title').text}"
+    id
+  end
+
   def import_kodi_nodes_from_xpath(path, kodi_data_type, type)
     get_kodi_data(kodi_data_type).xpath(path).map do |n|
-      import_kodi_node(n, type)
+      import_kodi_node(n, kodi_data_type, type)
     rescue SolidAssert::AssertionFailedError => e
       raise unless @settings[:suppress_errors_till_end]
 

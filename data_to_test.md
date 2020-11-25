@@ -16,15 +16,15 @@
 
 
 ## ToDo List
-- Handle TV Series
-  - When an episode is started, its shown with an offset, the season and series are also viewed with playcount being 0
-  - When an episode is completed, the season and series are also completed
-  - A seen episode marks the season as seen and the show as seen
-  - specials
-  - test multi-ep series
-  - created_at for season  and series = when first episode was ever watched, last_viewed_atand updated_at = when last episdewas watched
-  - index = ep no, parent index = season number
-
-- take another stab at changed_at
+- Handle Anime
+  - movie with stack
+  - correctly import anime
+  - Handle TV Series
+    - When an episode is started, its shown with an offset, the season and series are also viewed with playcount being 0
+    - When an episode is completed, the season and series are also completed
+    - A seen episode marks the season as seen and the show as seen
+    - specials
+    - test multi-ep series
+    - created_at for season  and series = when first episode was ever watched, last_viewed_atand updated_at = when last episdewas watched
+    - index = ep no, parent index = season number
 - video nodes
-- Does it work with anidb metadata
