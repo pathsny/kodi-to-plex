@@ -23,6 +23,8 @@ Object.send(:remove_const, :IMDB_MATCH_REGEX) if Object.const_defined?(:IMDB_MAT
 IMDB_MATCH_REGEX = %r{com.plexapp.agents.imdb://(?<imdb>.*)\?lang=en}.freeze
 Object.send(:remove_const, :TVEP_MATCH_REGEX) if Object.const_defined?(:TVEP_MATCH_REGEX)
 TVEP_MATCH_REGEX = %r{com.plexapp.agents.thetvdb://(?<tvdb>\d*)/(?<season>.*)/(?<episode>.*)\?lang=en}.freeze
+Object.send(:remove_const, :ANIDB_MATCH_REGEX) if Object.const_defined?(:ANIDB_MATCH_REGEX)
+ANIDB_MATCH_REGEX = %r{com.plexapp.agents.hama://anidb-(?<anidb>\d*)(?:/(?<season>.*)/(?<episode>.*))?\?lang=en}.freeze
 
 class Importer
   class << self

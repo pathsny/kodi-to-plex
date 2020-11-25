@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 load File.join(__dir__, 'importer.rb')
+load File.join(__dir__, 'verifier.rb')
 load File.join(DATA_PATH, 'test_imports.rb')
 
 def get_settings
@@ -46,6 +47,12 @@ def seen_tv
     }
   end
   seenh
+end
+
+def make_verifier
+  settings = get_settings()
+  Verifier.close()
+  Verifier.new(settings)
 end
 
 def reload_script
