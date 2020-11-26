@@ -110,7 +110,7 @@ class Importer
     end
   end
 
-  def retrieve_tv_metadata(video_data)
+  def retrieve_tv_metadata(video_data, kodi_data_type)
     metadata_items = metadata_items_for_file_query(video_data).includes(:parent)
     metadata_items_for_episode = metadata_items.filter do |m|
       m.index == video_data[:episode] &&
@@ -142,15 +142,32 @@ class Importer
     end
 
     metadata_items_for_episode.first.tap do |metadata_item|
-      match_data = metadata_item.guid.match(TVEP_MATCH_REGEX)&.named_captures&.symbolize_keys
+      regex =
+        case kodi_data_type
+        when :live_action
+          TVEP_MATCH_REGEX
+        when :anime
+          ANIDB_MATCH_REGEX
+        else
+          assert(false, "unknown kodi_data_type #{kodi_data_type} when processing #{video_data[:filenameandpath]}")
+        end
+      match_data = metadata_item.guid.match(regex)&.named_captures&.symbolize_keys
       assert(
         match_data,
-        "guid #{metadata_item.guid} for #{video_data[:filenameandpath]} does not match the pattern to extract tvdb id",
+        "guid #{metadata_item.guid} for #{video_data[:filenameandpath]} does not match the pattern to extract show id",
       )
-      assert(
-        video_data[:tvdb] == match_data[:tvdb],
-        "TVDB ID for #{video_data[:filenameandpath]} is #{video_data[:tvdb]} in kodi and #{match_data[:tvdb]} in plex",
-      ) unless @exclusions['known_tvdb_mismatches'].include?(metadata_item.parent.parent.title)
+      case kodi_data_type
+      when :live_action
+        assert(
+          video_data[:tvdb] == match_data[:tvdb],
+          "TVDB ID for #{video_data[:filenameandpath]} is #{video_data[:tvdb]} in kodi and #{match_data[:tvdb]} in plex",
+        ) unless @exclusions['known_tvdb_mismatches'].include?(metadata_item.parent.parent.title)
+      when :anime
+        assert(
+          video_data[:anidb] == match_data[:anidb],
+          "AniDB ID for #{video_data[:filenameandpath]} is #{video_data[:anidb]} in kodi and #{match_data[:anidb]} in plex",
+        )
+      end
       assert(
         video_data[:season] == match_data[:season].to_i,
         "GUID Mismatch: Season for #{video_data[:filenameandpath]} is #{video_data[:season]} in kodi and #{match_data[:season]} in plex. #{metadata_item.guid}",
@@ -169,9 +186,11 @@ class Importer
     when [:anime, :movie]
       retrieve_anime_movie_metadata(video_data)
     when [:live_action, :tv]
-      retrieve_tv_metadata(video_data)
+      retrieve_tv_metadata(video_data, :live_action)
+    when [:anime, :tv]
+      retrieve_tv_metadata(video_data, :anime)
     else
-      assert true, "unknown media type #{type} and kodi data type #{kodi_data_type} combination  when retrieving metadata for #{video_data[:filenameandpath]}"
+      assert(false, "unknown media type #{type} and kodi data type #{kodi_data_type} combination when retrieving metadata for #{video_data[:filenameandpath]}")
     end
   end
 
@@ -295,9 +314,9 @@ class Importer
     end
   end
 
-  def import_tv_videos(video_data)
+  def import_tv_videos(video_data, kodi_data_type)
     video_data[:episodes].each do |episode|
-      import_video(episode, :live_action, :tv)
+      import_video(episode, kodi_data_type, :tv)
     rescue StandardError => e
       raise
     end
@@ -323,7 +342,7 @@ class Importer
 
   def import_tv_node(node)
     tvdb_id = node.xpath('uniqueid[@default]/text()').text
-    episodes = node.xpath('episodedetails').map { |n| extract_kodi_ep_info(n, tvdb_id) }
+    episodes = node.xpath('episodedetails').map { |n| extract_kodi_ep_info(n, tvdb: tvdb_id) }
     info = {
       tvdb: tvdb_id,
       **extract_base_video_info(node),
@@ -331,7 +350,20 @@ class Importer
     }
     return if @exclusions['tv_shows_to_skip'].include?(info[:title])
 
-    import_tv_videos(info)
+    import_tv_videos(info, :live_action)
+  end
+
+  def import_anime_tv_node(node)
+    anidb_id = extract_anidb_id(node)
+
+    episodes = node.xpath('episodedetails').map { |n| extract_kodi_ep_info(n, anidb: anidb_id) }
+    info = {
+      anidb: anidb_id,
+      **extract_base_video_info(node),
+      episodes: episodes,
+    }
+    return if @exclusions['tv_shows_to_skip'].include?(info[:title])
+    import_tv_videos(info, :anime)
   end
 
   def import_kodi_node(node, kodi_data_type, type)
@@ -342,19 +374,20 @@ class Importer
       import_movie_node(node)
     when [:movie, :anime]
       import_anime_movie_node(node)
-    when :tv
+    when [:tv, :live_action]
       import_tv_node(node)
+    when [:tv, :anime]
+      import_anime_tv_node(node)
     end
   end
 
-  def extract_kodi_ep_info(node, tvdb_id)
+  def extract_kodi_ep_info(node, id_data)
     {
       season: node.xpath('season').text.to_i,
       episode: node.xpath('episode').text.to_i,
-      tvdb: tvdb_id,
       **extract_base_video_info(node),
       **extract_position(node),
-    }
+    }.merge(id_data)
   end
 
   def extract_base_video_info(node)
