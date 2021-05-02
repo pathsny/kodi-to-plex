@@ -34,7 +34,7 @@ Importer.close()
 
 def compare_sql_output(stdout)
   expected = File.read(DIFF_PATH)
-  diff = Diffy::Diff.new(expected, stdout).to_s(:color)
+  diff = Diffy::Diff.new(expected, stdout, context: 1).to_s(:color)
   if diff.strip.empty?
     puts "\e[32m" + 'ALL GOOD' + "\e[0m"
   else
