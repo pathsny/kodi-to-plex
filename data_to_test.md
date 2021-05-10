@@ -14,6 +14,8 @@
 | Prestige | 0 | 1 | tt0482571 | 2020-09-16 | Started | Watched | Stopped | Yes |
 
 
+Multi movie movies are being treated as specials by plex
+
 
 ## ToDo List
 - Handle Anime
