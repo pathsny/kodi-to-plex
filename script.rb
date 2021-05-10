@@ -11,6 +11,6 @@ importer.import_kodi_nodes_from_xpath('//tvshow',:live_action, :tv)
 failed_assertions = importer.assertions
 Importer.close()
 unless failed_assertions.empty?
-  ap failed_assertions
+  ap failed_assertions.map { |e| [e.to_s, e.backtrace]}
   raise 'Script ran with Errors'
 end

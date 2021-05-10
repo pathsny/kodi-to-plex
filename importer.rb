@@ -86,8 +86,9 @@ class Importer
       unless @exclusions['known_imdb_mismatches'].include?(metadata_item.title)
 
         imdb_id = metadata_item.guid.match(IMDB_MATCH_REGEX)&.named_captures&.dig('imdb')
-        assert(
+        assert_video_data(
           imdb_id == video_data[:imdb],
+          video_data,
           "Imdb does not match for #{metadata_item.title}. Plex has #{imdb_id} and Kodi has #{video_data[:imdb]}",
         )
       end
@@ -99,14 +100,19 @@ class Importer
     if (metadata_items.size > 1)
       ap metadata_items
     end
-    assert(metadata_items.size == 1, "found #{metadata_items.size} items for #{video_data[:filenameandpath]}")
+    assert(metadata_items.size == 1, "found #{metadata_items.size} items with ids #{metadata_items.map(&:id).join(',')} for #{video_data[:filenameandpath]}")
     metadata_items.first.tap do |metadata_item|
       anidb_id = metadata_item.guid.match(ANIDB_MATCH_REGEX)&.named_captures&.dig('anidb')
-      assert(
-        anidb_id == video_data[:anidb],
-        "Anidb does not match for #{metadata_item.title}. Plex has #{anidb_id} and Kodi has #{video_data[:anidb]}",
+      actual_anidb_id = video_data[:anidb]
+      if @exclusions['anidb_corrections'].include?(video_data[:filenameandpath])
+        actual_anidb_id = @exclusions['anidb_corrections'][video_data[:filenameandpath]]
+      end
+      assert_video_data(
+        anidb_id == actual_anidb_id,
+        video_data,
+        "Anidb does not match for #{metadata_item.title}. Plex has #{anidb_id} and Kodi has #{actual_anidb_id}",
       )
-      assert(metadata_item.parent.index == 1, 'movies only have one season')
+      assert_video_data([0, 1].include?(metadata_item.parent.index) , video_data, "movies should only have one season. Found #{metadata_item.parent.index} unlike metadata #{metadata_item.id} with parent #{metadata_item.parent.id}")
     end
   end
 
@@ -118,7 +124,7 @@ class Importer
     end
     assert(
       metadata_items_for_episode.size == 1,
-      "found #{metadata_items_for_episode.size} items for #{video_data[:filenameandpath]}",
+      "found #{metadata_items_for_episode.size} items with ids #{metadata_items_for_episode.map(&:id).join(',')} for #{video_data[:filenameandpath]}",
     )
 
     if metadata_items.size > 1 # This is a multi-episode file. Let's make sure they're consistent
@@ -443,6 +449,10 @@ class Importer
 
       @assertions << e
     end
+  end
+
+  def assert_video_data(condition, video_data, message)
+    assert(condition, "#{message} for #{video_data[:filenameandpath]}")
   end
 
   def inspect
