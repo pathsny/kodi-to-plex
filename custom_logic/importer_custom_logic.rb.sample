@@ -1,0 +1,13 @@
+module ImporterCustomLogic
+  def custom_replacement_function(video_data, file_in_plex, kodi_data_type, type)
+    case [kodi_data_type, type]
+    when [:live_action, :movie]
+      return file_in_plex
+    when [:live_action, :movie]
+      return file_in_plex
+    when [:anime, :movie]
+      return file_in_plex
+    when [:anime, :tv]
+      return file_in_plex
+    end
+end

@@ -5,7 +5,7 @@ require 'open3'
 require 'diffy'
 require 'optparse'
 require File.join(__dir__, 'importer')
-require File.join(DATA_PATH, 'test_imports')
+require File.join(__dir__, 'custom_logic/test_imports.rb')
 
 options = {}
 OptionParser.new do |opts|

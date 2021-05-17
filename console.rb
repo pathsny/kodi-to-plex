@@ -2,7 +2,14 @@
 
 load File.join(__dir__, 'importer.rb')
 load File.join(__dir__, 'verifier.rb')
-load File.join(DATA_PATH, 'test_imports.rb')
+load File.join(__dir__, 'custom_logic', 'test_imports.rb')
+
+begin
+  load File.join(__dir__, 'custom_logic', 'importer_custom_logic.rb')
+rescue LoadError
+  module ImporterCustomLogic
+  end
+end
 
 def get_settings
   settings_file = File.read(File.join(DATA_PATH, 'settings.json'))

@@ -11,6 +11,13 @@ require File.join(__dir__, 'changed_at')
 require File.join(__dir__, 'models')
 
 begin
+  load File.join(__dir__, 'custom_logic', 'importer_custom_logic.rb')
+rescue LoadError
+  module ImporterCustomLogic
+  end
+end
+
+begin
   require 'amazing_print'
 rescue LoadError
 end
@@ -27,6 +34,8 @@ Object.send(:remove_const, :ANIDB_MATCH_REGEX) if Object.const_defined?(:ANIDB_M
 ANIDB_MATCH_REGEX = %r{com.plexapp.agents.hama://anidb-(?<anidb>\d*)(?:/(?<season>.*)/(?<episode>.*))?\?lang=en}.freeze
 
 class Importer
+  prepend ImporterCustomLogic
+
   class << self
     def new(settings)
       raise 'Can only create one instance' unless @instance.nil?
@@ -67,20 +76,24 @@ class Importer
     MetadataItemView.delete_all
   end
 
-  def metadata_items_for_file_query(video_data)
+  def metadata_items_for_file_query(video_data, kodi_data_type, type)
     media_files = video_data[:filenameandpath_split].map do |name|
-      @exclusions['filename_substitutions'].fetch(name, name).sub(
+      file_in_plex = @exclusions['filename_substitutions'].fetch(name, name).sub(
         @settings[:kodi_media_path_match],
         @settings[:plex_media_path_replace],
       )
+      custom_replacement_function(video_data, file_in_plex, kodi_data_type, type)
     end
     metadata_items = MetadataItem.joins(media_items: [:media_parts]).where(
       media_items: { media_parts: { file: media_files } },
     ).distinct
   end
 
-  def retrieve_movie_metadata(video_data)
-    metadata_items = metadata_items_for_file_query(video_data)
+  def custom_replacement_function(video_data, file_in_plex, kodi_data_type, type)
+    file_in_plex
+  end
+
+  def retrieve_movie_metadata(video_data, metadata_items)
     assert metadata_items.size == 1, "found #{metadata_items.size} items for #{video_data[:filenameandpath]}"
     metadata_items.first.tap do |metadata_item|
       unless @exclusions['known_imdb_mismatches'].include?(metadata_item.title)
@@ -95,11 +108,7 @@ class Importer
     end
   end
 
-  def retrieve_anime_movie_metadata(video_data)
-    metadata_items = metadata_items_for_file_query(video_data)
-    if (metadata_items.size > 1)
-      ap metadata_items
-    end
+  def retrieve_anime_movie_metadata(video_data, metadata_items)
     assert(metadata_items.size == 1, "found #{metadata_items.size} items with ids #{metadata_items.map(&:id).join(',')} for #{video_data[:filenameandpath]}")
     metadata_items.first.tap do |metadata_item|
       anidb_id = metadata_item.guid.match(ANIDB_MATCH_REGEX)&.named_captures&.dig('anidb')
@@ -116,8 +125,8 @@ class Importer
     end
   end
 
-  def retrieve_tv_metadata(video_data, kodi_data_type)
-    metadata_items = metadata_items_for_file_query(video_data).includes(:parent)
+  def retrieve_tv_metadata(video_data, kodi_data_type, metadata_items_query)
+    metadata_items = metadata_items_query.includes(:parent)
     metadata_items_for_episode = metadata_items.filter do |m|
       m.index == video_data[:episode] &&
         m.parent.index == video_data[:season]
@@ -186,15 +195,16 @@ class Importer
   end
 
   def retrieve_metadata(video_data, kodi_data_type, type)
+    metadata_items_query = metadata_items_for_file_query(video_data, kodi_data_type, type)
     case [kodi_data_type, type]
     when [:live_action, :movie]
-      retrieve_movie_metadata(video_data)
+      retrieve_movie_metadata(video_data, metadata_items_query)
     when [:anime, :movie]
-      retrieve_anime_movie_metadata(video_data)
+      retrieve_anime_movie_metadata(video_data, metadata_items_query)
     when [:live_action, :tv]
-      retrieve_tv_metadata(video_data, :live_action)
+      retrieve_tv_metadata(video_data, :live_action, metadata_items_query)
     when [:anime, :tv]
-      retrieve_tv_metadata(video_data, :anime)
+      retrieve_tv_metadata(video_data, :anime, metadata_items_query)
     else
       assert(false, "unknown media type #{type} and kodi data type #{kodi_data_type} combination when retrieving metadata for #{video_data[:filenameandpath]}")
     end
