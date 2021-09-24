@@ -209,8 +209,9 @@ class Importer
         "#{video_data[:filenameandpath]} has play stats without last played",
       )
     end
-    return if @exclusions['filenames_to_skip'].include?(video_data[:filenameandpath])
-    return if @exclusions['filename_extensions_to_skip'].include?(File.extname(video_data[:filenameandpath]))
+    return if @exclusions['video_data_to_skip'].any? do |vd|
+      vd.all? {|k, v| video_data[k.to_sym] == v}
+    end
 
     metadata_item = retrieve_metadata(video_data, kodi_data_type, type)
     return if video_data[:last_played].nil?
@@ -401,6 +402,7 @@ class Importer
     {
       filenameandpath: filenameandpath,
       filenameandpath_split: filenameandpath.scan(FILE_MATCH_REGEX),
+      extension: File.extname(filenameandpath),
       last_played: (DateTime.parse(node.xpath('lastplayed/text()').text) rescue nil),
       play_count: @exclusions['play_count_overrides'].fetch(
         filenameandpath,
