@@ -361,16 +361,20 @@ class Importer
   end
 
   def import_anime_tv_node(node)
+    info = anime_tv_data_to_import(node)
+    return if @exclusions['tv_shows_to_skip'].include?(info[:title])
+    import_tv_videos(info, :anime)
+  end
+
+  def anime_tv_data_to_import(node)
     anidb_id = extract_anidb_id(node)
 
     episodes = node.xpath('episodedetails').map { |n| extract_kodi_ep_info(n, anidb: anidb_id) }
-    info = {
+    {
       anidb: anidb_id,
       **extract_base_video_info(node),
       episodes: episodes,
     }
-    return if @exclusions['tv_shows_to_skip'].include?(info[:title])
-    import_tv_videos(info, :anime)
   end
 
   def import_kodi_node(node, kodi_data_type, type)
