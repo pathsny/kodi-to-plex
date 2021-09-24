@@ -125,11 +125,34 @@ class Importer
     end
   end
 
+  ANIME_SPECIAL_REGEX = /- episode (?<special_prefix>[SCTPO])(?<special_number>\d+)/
+  ANIDB_HAMA_SPECIAL_OFFSETS = {
+    S: [0],
+    C: [100, 150],
+    T: [200],
+    P: [300],
+    O: [400],
+  }
+
   def retrieve_tv_metadata(video_data, kodi_data_type, metadata_items_query)
     metadata_items = metadata_items_query.includes(:parent)
+    anime_special_match = ANIME_SPECIAL_REGEX.match(video_data[:filenameandpath])
+    anime_special = kodi_data_type == :anime && anime_special_match
+    if anime_special
+      assert(metadata_items.size == 1, "only handle single episode specials for now while handling #{video_data[:filenameandpath]} and seeing #{metadata_items.to_a}")
+      m = metadata_items.first
+      assert(m.parent.index.zero?, "specials in plex should be season 0 and not #{m.parent.index} for #{video_data[:filenameandpath]}")
+      special_offset = ANIDB_HAMA_SPECIAL_OFFSETS[anime_special_match[:special_prefix].to_sym]
+      assert(
+        special_offset.map {|o| o + anime_special_match[:special_number].to_i}.any? {|ep_number| ep_number == m.index},
+        "expected index to have offset #{special_offset} and number #{anime_special_match[:special_number]} and not #{m.index} for #{video_data[:filenameandpath]}"
+      )
+    end
     metadata_items_for_episode = metadata_items.filter do |m|
-      m.index == video_data[:episode] &&
+      anime_special || ( # kodi matches were not accurate for specials
+        m.index == video_data[:episode] &&
         m.parent.index == video_data[:season]
+      )
     end
     assert(
       metadata_items_for_episode.size == 1,
@@ -183,14 +206,17 @@ class Importer
           "AniDB ID for #{video_data[:filenameandpath]} is #{video_data[:anidb]} in kodi and #{match_data[:anidb]} in plex",
         )
       end
-      assert(
-        video_data[:season] == match_data[:season].to_i,
-        "GUID Mismatch: Season for #{video_data[:filenameandpath]} is #{video_data[:season]} in kodi and #{match_data[:season]} in plex. #{metadata_item.guid}",
-      )
-      assert(
-        video_data[:episode] == match_data[:episode].to_i,
-        "GUID Mismatch: Episode for #{video_data[:filenameandpath]} is #{video_data[:episode]} in kodi and #{match_data[:episode]} in plex. #{metadata_item.guid}",
-      )
+      unless (kodi_data_type == :anime && match_data[:season] == '0')
+        # anime specials are not correctly tagged in kodi
+        assert(
+          video_data[:season] == match_data[:season].to_i,
+          "GUID Mismatch: Season for #{video_data[:filenameandpath]} is #{video_data[:season]} in kodi and #{match_data[:season]} in plex. #{metadata_item.guid}",
+        )
+        assert(
+          video_data[:episode] == match_data[:episode].to_i,
+          "GUID Mismatch: Episode for #{video_data[:filenameandpath]} is #{video_data[:episode]} in kodi and #{match_data[:episode]} in plex. #{metadata_item.guid}",
+        )
+      end
     end
   end
 
