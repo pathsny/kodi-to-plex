@@ -76,14 +76,21 @@ class Importer
     MetadataItemView.delete_all
   end
 
-  def metadata_items_for_file_query(video_data, kodi_data_type, type)
-    media_files = video_data[:filenameandpath_split].map do |name|
-      file_in_plex = @exclusions['filename_substitutions'].fetch(name, name).sub(
+  def media_parts_for_file_query(video_data, kodi_data_type, type)
+    video_data[:filenameandpath_split].map do |name|
+      substituted_name = @exclusions['filename_substitutions'].reduce(name) do |new_name, (pattern, repl)|
+        new_name.sub(pattern, repl)
+      end
+      file_in_plex = substituted_name.sub(
         @settings[:kodi_media_path_match],
         @settings[:plex_media_path_replace],
       )
       custom_replacement_function(video_data, file_in_plex, kodi_data_type, type)
     end
+  end
+
+  def metadata_items_for_file_query(video_data, kodi_data_type, type)
+    media_files = media_parts_for_file_query(video_data, kodi_data_type, type)
     metadata_items = MetadataItem.joins(media_items: [:media_parts]).where(
       media_items: { media_parts: { file: media_files } },
     ).distinct
@@ -134,6 +141,12 @@ class Importer
     O: [400],
   }
 
+  def assert_media_parts_exist(video_data, kodi_data_type, type)
+    media_parts = media_parts_for_file_query(video_data, kodi_data_type, type)
+    media_parts_query = MediaPart.where(file: media_parts_for_file_query(video_data, kodi_data_type, type))
+    assert(media_parts_query.size == 1, "Could not find media #{media_parts} while processing #{video_data[:filenameandpath]}")
+  end
+
   def retrieve_tv_metadata(video_data, kodi_data_type, metadata_items_query)
     metadata_items = metadata_items_query.includes(:parent)
     anime_special_match = ANIME_SPECIAL_REGEX.match(video_data[:filenameandpath])
@@ -154,9 +167,13 @@ class Importer
         m.parent.index == video_data[:season]
       )
     end
+    if (metadata_items_for_episode.empty?)
+      # lets check if the files are missing before reporting a metadata error
+      assert_media_parts_exist(video_data, kodi_data_type, :tv)
+    end
     assert(
       metadata_items_for_episode.size == 1,
-      "found #{metadata_items_for_episode.size} items with ids #{metadata_items_for_episode.map(&:id).join(',')} for #{video_data[:filenameandpath]}",
+      "found #{metadata_items_for_episode.size} items with ids #{metadata_items_for_episode.map(&:id).join(',')} for #{video_data[:filenameandpath]} season: #{video_data[:season]}, episode: #{video_data[:episode]}",
     )
 
     if metadata_items.size > 1 # This is a multi-episode file. Let's make sure they're consistent
@@ -236,6 +253,21 @@ class Importer
     end
   end
 
+  def should_exclude_video_data_for_attribute(video_data, attr_name, attr_value)
+    (video_data[attr_name.to_sym] == attr_value)
+  end
+
+  def should_exclude_video_data?(video_data)
+    return true if @exclusions['video_data_to_skip'].any? do |vd_to_skip_attrs|
+      vd_to_skip_attrs.all? { |k, v| should_exclude_video_data_for_attribute(video_data, k, v) }
+    end
+
+    filename_regexes = @exclusions['filename_regex_to_skip'].map { |r_string| Regexp.new(Regexp.escape(r_string)) }
+    return true if filename_regexes.any? { |rgx| rgx.match(video_data[:filenameandpath]) }
+
+    false
+  end
+
   def import_video(video_data, kodi_data_type, type)
     assert([:movie, :tv].include?(type), "unknown media type #{type} when importing video for #{video_data[:filenameandpath]}")
     assert([:live_action, :anime].include?(kodi_data_type), "unknown kodi data type #{kodi_data_type} when importing video for #{video_data[:filenameandpath]}")
@@ -245,11 +277,12 @@ class Importer
         "#{video_data[:filenameandpath]} has play stats without last played",
       )
     end
-    return if @exclusions['video_data_to_skip'].any? do |vd|
-      vd.all? {|k, v| video_data[k.to_sym] == v}
-    end
+
+    return if should_exclude_video_data?(video_data)
 
     metadata_item = retrieve_metadata(video_data, kodi_data_type, type)
+
+    # no point adding metadata since it was clearly never watched. No other metadata is interesting.
     return if video_data[:last_played].nil?
 
     # How we handle duplicate records
