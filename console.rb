@@ -63,5 +63,6 @@ def make_verifier
 end
 
 def reload_script
+  Importer.close()
   load File.join(__FILE__)
 end
