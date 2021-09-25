@@ -118,15 +118,12 @@ class Importer
   def retrieve_anime_movie_metadata(video_data, metadata_items)
     assert(metadata_items.size == 1, "found #{metadata_items.size} items with ids #{metadata_items.map(&:id).join(',')} for #{video_data[:filenameandpath]}")
     metadata_items.first.tap do |metadata_item|
-      anidb_id = metadata_item.guid.match(ANIDB_MATCH_REGEX)&.named_captures&.dig('anidb')
-      actual_anidb_id = video_data[:anidb]
-      if @exclusions['anidb_corrections'].include?(video_data[:filenameandpath])
-        actual_anidb_id = @exclusions['anidb_corrections'][video_data[:filenameandpath]]
-      end
+      plex_anidb_id = metadata_item.guid.match(ANIDB_MATCH_REGEX)&.named_captures&.dig('anidb')
+      expected_anidb_id = video_data[:anidb]
       assert_video_data(
-        anidb_id == actual_anidb_id,
+        plex_anidb_id == expected_anidb_id,
         video_data,
-        "Anidb does not match for #{metadata_item.title}. Plex has #{anidb_id} and Kodi has #{actual_anidb_id}",
+        "Anidb does not match for #{metadata_item.title}. Plex has #{plex_anidb_id} and Kodi has #{expected_anidb_id}",
       )
       assert_video_data([0, 1].include?(metadata_item.parent.index) , video_data, "movies should only have one season. Found #{metadata_item.parent.index} unlike metadata #{metadata_item.id} with parent #{metadata_item.parent.id}")
     end
@@ -413,7 +410,7 @@ class Importer
       **extract_position(node),
       **extract_base_video_info(node),
     }
-    import_video(info, :anime, :movie)
+    import_video(anime_info_with_anidb_corrections(info, :movie), :anime, :movie)
   end
 
   def import_tv_node(node)
@@ -436,14 +433,31 @@ class Importer
   end
 
   def anime_tv_data_to_import(node)
-    anidb_id = extract_anidb_id(node)
-
-    episodes = node.xpath('episodedetails').map { |n| extract_kodi_ep_info(n, anidb: anidb_id) }
+    info = anime_info_with_anidb_corrections(
+      {
+        anidb: extract_anidb_id(node),
+        **extract_base_video_info(node),
+      },
+      :tv,
+    );
+    episodes = node.xpath('episodedetails').map { |n| extract_kodi_ep_info(n, anidb: info[:anidb]) }
     {
-      anidb: anidb_id,
-      **extract_base_video_info(node),
+      **info,
       episodes: episodes,
     }
+  end
+
+  def anime_info_with_anidb_corrections(info, type)
+
+    case type
+    when :movie
+      info[:anidb] = @exclusions['anidb_corrections'].fetch(info[:filenameandpath], info[:anidb])
+    when :tv
+      info[:anidb] = @exclusions['anidb_corrections'].fetch(info[:title], info[:anidb])
+    else
+      assert(false, "type was called with a value thats not :movie or :tv for #{info}")
+    end
+    info
   end
 
   def import_kodi_node(node, kodi_data_type, type)
