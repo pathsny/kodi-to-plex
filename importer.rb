@@ -259,7 +259,7 @@ class Importer
       vd_to_skip_attrs.all? { |k, v| should_exclude_video_data_for_attribute(video_data, k, v) }
     end
 
-    filename_regexes = @exclusions['filename_regex_to_skip'].map { |r_string| Regexp.new(Regexp.escape(r_string)) }
+    filename_regexes = @exclusions['filename_regex_to_skip'].map { |r_string| %r(#{r_string}) }
     return true if filename_regexes.any? { |rgx| rgx.match(video_data[:filenameandpath]) }
 
     false
