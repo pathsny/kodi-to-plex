@@ -101,6 +101,10 @@ class Importer
   end
 
   def retrieve_movie_metadata(video_data, metadata_items)
+    if metadata_items.empty?
+      # lets check if the files are missing before reporting a metadata error
+      assert_media_parts_exist(video_data, :live_action, :movie)
+    end
     assert metadata_items.size == 1, "found #{metadata_items.size} items for #{video_data[:filenameandpath]}"
     metadata_items.first.tap do |metadata_item|
       unless @exclusions['known_imdb_mismatches'].include?(metadata_item.title)
