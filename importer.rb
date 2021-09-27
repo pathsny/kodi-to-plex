@@ -96,6 +96,12 @@ class Importer
     ).distinct
   end
 
+  def assert_media_parts_exist(video_data, kodi_data_type, type)
+    media_parts = media_parts_for_file_query(video_data, kodi_data_type, type)
+    media_parts_query = MediaPart.where(file: media_parts)
+    assert(media_parts_query.size == 1, "Could not find media #{media_parts} while processing #{video_data[:filenameandpath]}")
+  end
+
   def custom_replacement_function(video_data, file_in_plex, kodi_data_type, type)
     file_in_plex
   end
@@ -142,39 +148,45 @@ class Importer
     O: [400],
   }
 
-  def assert_media_parts_exist(video_data, kodi_data_type, type)
-    media_parts = media_parts_for_file_query(video_data, kodi_data_type, type)
-    media_parts_query = MediaPart.where(file: media_parts_for_file_query(video_data, kodi_data_type, type))
-    assert(media_parts_query.size == 1, "Could not find media #{media_parts} while processing #{video_data[:filenameandpath]}")
+  def assert_metadata_and_check_if_anime_special(video_data, kodi_data_type, metadata_items)
+    anime_special_match = ANIME_SPECIAL_REGEX.match(video_data[:filenameandpath])
+    return false unless kodi_data_type == :anime && anime_special_match
+
+    assert(metadata_items.size == 1, "only handle single episode specials for now while handling #{video_data[:filenameandpath]} and seeing #{metadata_items.to_a}")
+    m = metadata_items.first
+    assert(m.parent.index.zero?, "specials in plex should be season 0 and not #{m.parent.index} for #{video_data[:filenameandpath]}")
+    special_offset = ANIDB_HAMA_SPECIAL_OFFSETS[anime_special_match[:special_prefix].to_sym]
+    assert(
+      special_offset.map { |o| o + anime_special_match[:special_number].to_i}.any? {|ep_number| ep_number == m.index},
+      "expected index to have offset #{special_offset} and number #{anime_special_match[:special_number]} and not #{m.index} for #{video_data[:filenameandpath]}",
+    )
+    true
   end
 
-  def retrieve_tv_metadata(video_data, kodi_data_type, metadata_items_query)
-    metadata_items = metadata_items_query.includes(:parent)
-    anime_special_match = ANIME_SPECIAL_REGEX.match(video_data[:filenameandpath])
-    anime_special = kodi_data_type == :anime && anime_special_match
-    if anime_special
-      assert(metadata_items.size == 1, "only handle single episode specials for now while handling #{video_data[:filenameandpath]} and seeing #{metadata_items.to_a}")
-      m = metadata_items.first
-      assert(m.parent.index.zero?, "specials in plex should be season 0 and not #{m.parent.index} for #{video_data[:filenameandpath]}")
-      special_offset = ANIDB_HAMA_SPECIAL_OFFSETS[anime_special_match[:special_prefix].to_sym]
-      assert(
-        special_offset.map {|o| o + anime_special_match[:special_number].to_i}.any? {|ep_number| ep_number == m.index},
-        "expected index to have offset #{special_offset} and number #{anime_special_match[:special_number]} and not #{m.index} for #{video_data[:filenameandpath]}"
-      )
-    end
-    metadata_items_for_episode = metadata_items.filter do |m|
+  def retrieve_tv_metadata_matching_kodi_episodes(video_data, kodi_data_type, metadata_items)
+    anime_special = assert_metadata_and_check_if_anime_special(video_data, kodi_data_type, metadata_items)
+    metadata_items.filter do |m|
       anime_special || ( # kodi matches were not accurate for specials
         m.index == video_data[:episode] &&
         m.parent.index == video_data[:season]
       )
     end
-    if (metadata_items_for_episode.empty?)
+  end
+
+  def retrieve_tv_metadata(video_data, kodi_data_type, metadata_items_query)
+    metadata_items = retrieve_tv_metadata_matching_kodi_episodes(
+      video_data,
+      kodi_data_type,
+      metadata_items_query.includes(:parent),
+    )
+
+    if metadata_items.empty?
       # lets check if the files are missing before reporting a metadata error
       assert_media_parts_exist(video_data, kodi_data_type, :tv)
     end
     assert(
-      metadata_items_for_episode.size == 1,
-      "found #{metadata_items_for_episode.size} items with ids #{metadata_items_for_episode.map(&:id).join(',')} for #{video_data[:filenameandpath]} season: #{video_data[:season]}, episode: #{video_data[:episode]}",
+      metadata_items.size == 1,
+      "found #{metadata_items.size} items with ids #{metadata_items.map(&:id).join(',')} for #{video_data[:filenameandpath]} season: #{video_data[:season]}, episode: #{video_data[:episode]}",
     )
 
     if metadata_items.size > 1 # This is a multi-episode file. Let's make sure they're consistent
@@ -197,7 +209,7 @@ class Importer
       end
     end
 
-    metadata_items_for_episode.first.tap do |metadata_item|
+    metadata_items.first.tap do |metadata_item|
       regex =
         case kodi_data_type
         when :live_action
@@ -224,7 +236,7 @@ class Importer
           "AniDB ID for #{video_data[:filenameandpath]} is #{video_data[:anidb]} in kodi and #{match_data[:anidb]} in plex",
         )
       end
-      unless (kodi_data_type == :anime && match_data[:season] == '0')
+      unless kodi_data_type == :anime && match_data[:season] == '0'
         # anime specials are not correctly tagged in kodi
         assert(
           video_data[:season] == match_data[:season].to_i,
